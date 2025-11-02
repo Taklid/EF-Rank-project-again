@@ -1,0 +1,143 @@
+/* ✅ Fullscreen Background with Blur */
+.login-container {
+  background-image: url("../assets/home/MESSi.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  backdrop-filter: blur(6px); /* পুরো ব্যাকগ্রাউন্ডে হালকা blur */
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ✅ Glassmorphism Login Box */
+.login-form {
+  background: rgba(102, 116, 148, 0.719);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
+  backdrop-filter: blur(1px);
+  padding: 2rem;
+  border-radius: 1.2rem;
+  width: 90%;
+  max-width: 380px;
+  color: white;
+  
+}
+
+/* Title Glow */
+.login-title {
+  font-size: 2rem;
+  text-align: center;
+  color: #00ffff;
+  text-shadow: 0 0 12px #00ffff;
+  margin-bottom: 1.5rem;
+  font-weight: bold;
+}
+
+/* Label */
+.label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #d1d5db;
+  font-weight: 500;
+}
+
+/* Input */
+.input-field {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #00ffff66;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  border-color: #00ffff;
+  box-shadow: 0 0 10px #00ffff66;
+}
+
+/* Eye Button */
+.eye-btn {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  color: #00ffff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* Submit Button */
+.submit-btn {
+  margin-top: 1.5rem;
+  width: 100%;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+  color: white;
+  font-weight: bold;
+  padding: 0.7rem;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  transition: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.submit-btn:hover {
+  background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  box-shadow: 0 0 20px #00ffff;
+}
+
+/* Loader */
+.loader {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid #00ffff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Demo Text */
+.demo-text {
+  text-align: center;
+  margin-top: 1rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.demo-text span {
+  color: #00ffff;
+}
+
+.forgot-btn {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 15px;
+  text-align: right;
+  color: #00ffff;
+  font-size: 14px;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.forgot-btn:hover {
+  color: #66ffff;
+}

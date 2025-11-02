@@ -1,0 +1,43 @@
+.future {
+  position: relative;
+  width: 100%;
+  background-image: url(../../assets/home/taklid-food.jpg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed; /* Scroll করলে সুন্দর effect */
+  overflow: hidden;
+}
+
+/* 🔹 Dark overlay for opacity */
+.future::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.55); /* এখানে opacity নিয়ন্ত্রণ */
+  z-index: 0;
+}
+
+/* 🔹 Responsive Design */
+@media (max-width: 768px) {
+  .future {
+    background-attachment: scroll;
+    padding: 30px 15px;
+  }
+
+  .future img {
+    width: 100%;
+    height: auto;
+  }
+
+  .future h2 {
+    font-size: 1.5rem;
+  }
+
+  .future p {
+    font-size: 0.9rem;
+  }
+}

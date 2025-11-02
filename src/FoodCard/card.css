@@ -1,0 +1,15 @@
+@keyframes glow {
+  0% {
+    filter: drop-shadow(0 0 5px #00ffcc);
+  }
+  50% {
+    filter: drop-shadow(0 0 15px #00ffcc);
+  }
+  100% {
+    filter: drop-shadow(0 0 5px #00ffcc);
+  }
+}
+
+.animate-glow {
+  animation: glow 2s infinite alternate;
+}

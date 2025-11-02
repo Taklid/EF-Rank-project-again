@@ -1,0 +1,47 @@
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradientMove {
+  animation: gradientMove 8s ease infinite;
+}
+/* 🔹 Neon Glow Hover */
+.hover\:drop-shadow-glow:hover {
+  filter: drop-shadow(0 0 6px #a3e635);
+}
+
+/* 🔹 Animated Shadow Pulse */
+@keyframes pulseShadow {
+  0% {
+    box-shadow: 0 0 10px rgba(163, 230, 53, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(163, 230, 53, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(163, 230, 53, 0.2);
+  }
+}
+
+.animate-pulseShadow {
+  animation: pulseShadow 6s infinite ease-in-out;
+}
+
+/* 🔹 Dark Mode Support */
+html.dark {
+  background-color: #0f172a;
+  color: white;
+}
+
+.dark .navbar {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(255, 255, 255, 0.1);
+}
