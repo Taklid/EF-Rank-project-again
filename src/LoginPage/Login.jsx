@@ -55,7 +55,7 @@ const Login = () => {
       Swal.fire({
         icon: "error",
         title: "Login Failed",
-        text: error.message,
+        text:"Please Try Again",
         background: "#1a1a1a",
         color: "#ff4d4d",
       });

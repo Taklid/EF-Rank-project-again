@@ -3,6 +3,7 @@ import { useState, useEffect, useContext, useMemo } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion"; // Added AnimatePresence
 import Swal from "sweetalert2";
+
 import {
   Sun,
   Moon,
@@ -18,7 +19,9 @@ import {
 } from "lucide-react";
 import { AuthContext } from "../Provider/AuthProvider";
 
-const API_URL = "http://localhost:13000/matches";
+const API_URL = "https://ef-server-rank-status.vercel.app/matches";
+// http://localhost:13000/
+// https://ef-server-rank-status.vercel.app/matches
 
 // NEW: Modal Component (Inline for simplicity)
 const PlayerStatsModal = ({ playerName, leaderboard, matches, onClose }) => {
@@ -120,7 +123,7 @@ const StatCard = ({ label, value, color }) => (
 const Scoreboard = () => {
   const { user } = useContext(AuthContext);
   const currentUserEmail = user?.email || "";
-  const adminEmails = ["taklidahammed007@gmail.com", "admin@example.com"];
+  const adminEmails = ["taklidahammed007@gmail.com", "rahathossain200603@gmail.com"];
 
   const [role, setRole] = useState("user");
   const [matches, setMatches] = useState([]);
@@ -231,47 +234,81 @@ const Scoreboard = () => {
   };
 
   const handleBulkSubmit = async () => {
-    if (!bulkText.trim()) {
-      Swal.fire("❗ Validation", "Please enter matches.", "warning");
-      return;
-    }
-    const lines = bulkText.split("\n").map((l) => l.trim()).filter(Boolean);
-    const bulkData = [];
+  if (!bulkText.trim()) {
+    Swal.fire("❗ Validation", "Please enter matches.", "warning");
+    return;
+  }
 
-    for (let line of lines) {
-      try {
-        const regex = /(.*?)\s*🔑\s*(\d+)\s*🆚\s*(\d+)\s*(.*)/;
-        const match = line.match(regex);
-        if (!match) continue;
-        const [, player1, score1, score2, player2] = match;
-        if (player1.trim() === player2.trim()) continue;
-        bulkData.push({
-          player1: player1.trim(),
-          player2: player2.trim(),
-          score1: Number(score1),
-          score2: Number(score2),
-          date: new Date().toISOString(),
-        });
-      } catch (err) {
-        console.error("Failed to parse line:", line, err);
-      }
-    }
+  const lines = bulkText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
 
-    if (bulkData.length === 0) {
-      Swal.fire("⚠️ No valid matches found!", "Please check your input format.", "info");
-      return;
+  const bulkData = [];
+
+  // ✅ Regex: "🔑" optional now
+  // Example accepted:
+  // Messi 🔑 3 🆚 2 Ronaldo
+  // Messi 3 🆚 2 Ronaldo
+  const regex = /^(.*?)\s*(?:🔑)?\s*(\d+)\s*🆚\s*(\d+)\s*(.*?)$/;
+
+  for (let line of lines) {
+    const match = line.match(regex);
+    if (!match) {
+      console.warn("❌ Invalid format:", line);
+      continue;
     }
 
-    try {
-      await Promise.all(bulkData.map((m) => axios.post(API_URL, m)));
-      Swal.fire("✅ Bulk Added!", `${bulkData.length} matches added successfully!`, "success");
-      setBulkText("");
-      fetchMatches();
-    } catch (err) {
-      console.error(err);
-      Swal.fire("❌ Error", "Failed to add bulk matches!", "error");
-    }
-  };
+    const [, player1, score1, score2, player2] = match;
+
+    if (!player1 || !player2 || player1.trim() === player2.trim()) continue;
+
+    bulkData.push({
+      player1: player1.trim(),
+      player2: player2.trim(),
+      score1: Number(score1),
+      score2: Number(score2),
+      date: new Date().toISOString(),
+    });
+  }
+
+  if (bulkData.length === 0) {
+    Swal.fire(
+      "⚠️ No valid matches found!",
+      "Please check your input format.",
+      "info"
+    );
+    return;
+  }
+
+  // ✅ Limit check: 14 matches maximum
+  if (bulkData.length > 14) {
+    Swal.fire(
+      "⚠️ Too many matches!",
+      "You can only add up to 14 matches at a time.",
+      "warning"
+    );
+    return;
+  }
+
+
+  try {
+    await Promise.all(bulkData.map((m) => axios.post(API_URL, m)));
+
+    Swal.fire(
+      "✅ Added!",
+      `${bulkData.length} matches added successfully!`,
+      "success"
+    );
+
+    setBulkText("");
+    fetchMatches();
+  } catch (err) {
+    console.error(err);
+    Swal.fire("❌ Error", "Failed to add bulk matches!", "error");
+  }
+};
+
 
   const handleDelete = async (id) => {
     const confirm = await Swal.fire({
@@ -490,7 +527,7 @@ const Scoreboard = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">
-            🏆 Smart Dynamic Scoreboard
+            🏆 Smart Scoreboard
           </h1>
           <div className="flex gap-2 items-center">
             <button
@@ -586,7 +623,7 @@ const Scoreboard = () => {
 
             {/* Bulk Add */}
             <div className="mt-4">
-              <h3 className="text-lg font-medium mb-2">Bulk Add Matches</h3>
+              <h3 className="text-lg font-medium mb-2"> Add Total Match</h3>
               <textarea
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
@@ -594,11 +631,35 @@ const Scoreboard = () => {
                 className="w-full p-2 rounded bg-gray-700 text-white h-32 resize-none"
               ></textarea>
               <button
-                onClick={handleBulkSubmit}
-                className="mt-2 bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold transition w-full md:w-auto"
-              >
-                Add Bulk Matches
-              </button>
+    onClick={handleBulkSubmit}
+    className="
+        mt-2 
+        bg-purple-600 
+        hover:bg-purple-700 
+        text-white 
+        p-2 
+        rounded 
+        font-bold 
+        transition 
+        w-full 
+        md:w-auto
+        
+        /* 💡 Enhanced Glow Effect Classes 💡 */
+        relative                
+        overflow-hidden         
+        shadow-xl               
+        shadow-purple-700/60    
+        hover:shadow-purple-600 
+        hover:scale-105 
+        duration-300
+        group                  
+        
+        /* Apply custom glow for a stronger effect */
+        custom-glow-button
+    "
+>
+    <span className="relative z-10">Add Match</span> {/* Text needs to be above the glow */}
+</button>
             </div>
           </div>
         )}
@@ -637,14 +698,14 @@ const Scoreboard = () => {
               onClick={() => exportCSV(leaderboard, "leaderboard.csv")}
               className="p-2 bg-green-700 hover:bg-green-600 rounded flex items-center gap-1 transition text-white"
             >
-              <Download size={16} /> Leaderboard CSV
+              <Download size={16} /> Leaderboard
             </button>
-            <button
+            {/* <button
               onClick={() => exportCSV(matches, "matches.csv")}
               className="p-2 bg-indigo-700 hover:bg-indigo-600 rounded flex items-center gap-1 transition text-white"
             >
               <Download size={16} /> Matches CSV
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -705,20 +766,20 @@ const Scoreboard = () => {
 
         <hr className="my-6 border-gray-700"/>
 
-        {/* Leaderboard */}
-        <h2 className="text-2xl font-semibold mb-3 text-center mt-8">
-          🏁 Leaderboard
-        </h2>
-        <div className="space-y-2">
-          {filteredBoard.length === 0 && (
-            <p className="text-center text-gray-400">No players found.</p>
-          )}
-          {filteredBoard.map((p, i) => (
-            <motion.div
-              key={p.name}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex flex-col sm:flex-row justify-between items-center p-3 rounded-lg shadow-md transition-all duration-300 
+      {/* Leaderboard */}
+<h2 className="text-2xl font-semibold mb-3 text-center mt-8">
+   Leaderboard
+</h2>
+<div className="space-y-2">
+  {filteredBoard.length === 0 && (
+    <p className="text-center text-gray-400">No players found.</p>
+  )}
+  {filteredBoard.map((p, i) => (
+    <motion.div
+      key={p.name}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`flex flex-col sm:flex-row justify-between items-center p-3 rounded-lg shadow-md transition-all duration-300 
     ${
       i === 0
         ? "bg-yellow-400 text-black font-bold hover:shadow-[0_0_15px_#FFD700] hover:scale-[1.01]"
@@ -728,65 +789,79 @@ const Scoreboard = () => {
         ? "bg-amber-700 text-white font-semibold hover:shadow-[0_0_15px_#FFBF00] hover:scale-[1.01]"
         : "bg-gray-700 text-white hover:shadow-[0_0_10px_#00FFFF] hover:scale-[1.01]"
     }`}
-            >
-              {/* NEW: Player Profile Link (Opens Modal) */}
-              <button
-                onClick={() => handlePlayerClick(p.name)}
-                className="mb-2 sm:mb-0 text-lg hover:underline transition font-bold flex items-center gap-2"
-                title="View full player stats"
-              >
-                {i + 1}. {p.name} {i < 3 && ["🥇", "🥈", "🥉"][i]}
-                <Zap size={14} className="text-blue-400"/>
-              </button>
-              <div className="flex flex-wrap justify-center sm:justify-end gap-x-4 gap-y-2 text-center text-sm">
-                
-                {/* NEW: Streak Display */}
-                <div className="flex flex-col w-12">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">STRK</span>
-                  <span className={`font-bold ${p.streak?.startsWith('W') ? 'text-green-600' : p.streak?.startsWith('L') ? 'text-red-600' : 'text-yellow-600'}`}>
-                    {p.streak}
-                  </span>
-                </div>
+    >
+      {/* Player Profile Link (Opens Modal) */}
+      <button
+        onClick={() => handlePlayerClick(p.name)}
+        className="mb-2 sm:mb-0 text-lg hover:underline transition font-bold flex items-center gap-2"
+        title="View full player stats"
+      >
+        {i + 1}. {p.name} {i < 3 && ["🥇", "🥈", "🥉"][i]}
+        <Zap size={14} className="text-blue-400"/>
+      </button>
 
-                {/* Points */}
-                <div className="flex flex-col w-10">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">
-                    PTS
-                  </span>
-                  <span
-                    className={`font-bold ${
-                      i === 0 ? "text-red-600" : "text-yellow-500"
-                    }`}
-                  >
-                    {p.points}
-                  </span>
-                </div>
-
-                {/* Wins, Draws, Losses, Played, Win% (Unchanged) */}
-                <div className="flex flex-col w-10">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">W</span>
-                  <span className=" font-bold">{p.wins}</span>
-                </div>
-                <div className="flex flex-col w-10">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">D</span>
-                  <span className=" font-bold">{p.draws}</span>
-                </div>
-                <div className="flex flex-col w-10">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">L</span>
-                  <span className="font-bold">{p.losses}</span>
-                </div>
-                <div className="flex flex-col w-12">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">PLD</span>
-                  <span className="font-bold">{p.played}</span>
-                </div>
-                <div className="flex flex-col w-12">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">W%</span>
-                  <span className="font-bold">{p.ratio}%</span>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+      {/* ✅ CRITICAL FIX: Enhanced Flex Container for Stats */}
+      {/* - flex-wrap: যাতে মোবাইল ভিউতে সব ডেটা এক লাইনে না থাকলে নিচে নেমে যায়।
+        - justify-start: ছোট স্ক্রিনে ডেটাগুলি বাম দিকে শুরু হবে।
+        - gap-x-2: কলামগুলোর মধ্যে আরও কম ফাঁকা জায়গা (মোবাইলের জন্য)।
+        - sm:gap-x-4: বড় স্ক্রিনে ফাঁকা জায়গা বাড়বে।
+      */}
+      <div className="flex flex-wrap justify-start sm:justify-end gap-x-2 sm:gap-x-4 gap-y-2 text-center text-sm">
+        
+        {/* Streak Display - w-10 করে দেওয়া হলো */}
+        <div className="flex flex-col w-10">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">STRK</span>
+          <span className={`font-bold ${p.streak?.startsWith('W') ? 'text-green-500' : p.streak?.startsWith('L') ? 'text-red-500' : 'text-yellow-500'}`}>
+            {p.streak}
+          </span>
         </div>
+
+        {/* Points */}
+        <div className="flex flex-col w-12">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">PTS</span>
+          <span
+            className={`font-bold ${
+              i === 0 ? "text-red-400" : "text-yellow-400"
+            }`}
+          >
+            {p.points}
+          </span>
+        </div>
+
+        {/* ✅ WINS (W) - w-6 করে দেওয়া হলো */}
+        <div className="flex flex-col w-10 md:w-10 text-center">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">W</span>
+          <span className="font-bold">{p.wins}</span>
+        </div>
+
+        {/* ✅ DRAWS (D) - w-6 করে দেওয়া হলো */}
+        <div className="flex flex-col w-10 md:w-10 text-center">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">D</span>
+          <span className="font-bold">{p.draws}</span>
+        </div>
+
+        {/* ✅ LOSSES (L) - w-6 করে দেওয়া হলো */}
+        <div className="flex flex-col w-10 md:w-10 text-center">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">L</span>
+          <span className="font-bold">{p.losses}</span>
+        </div>
+
+        {/* ✅ PLAYED (P) - w-6 করে দেওয়া হলো এবং PLD কে P করা হলো */}
+        <div className="flex flex-col  w-10 md:w-12 text-center">
+          {/* Mobile: Use 'P' (ALWAYS visible) */}
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">PLD</span>
+          <span className="font-bold">{p.played}</span>
+        </div>
+
+        {/* WIN RATIO (W%) - w-12 করে দেওয়া হলো */}
+        <div className="flex flex-col w-10 md:w-12 text-center">
+          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">W%</span>
+          <span className="font-bold text-sm">{p.ratio}%</span>
+        </div>
+      </div>
+    </motion.div>
+  ))}
+</div>
 
         <hr className="my-6 border-gray-700"/>
 
@@ -796,7 +871,7 @@ const Scoreboard = () => {
             onClick={() => setShowMatches(!showMatches)}
             className="flex items-center gap-1 mx-auto mb-4 font-semibold text-lg hover:text-blue-400 transition"
           >
-            ⚡ Recent Matches {showMatches ? <ChevronUp /> : <ChevronDown />}
+             Recent Matches {showMatches ? <ChevronUp /> : <ChevronDown />}
           </button>
           {showMatches && (
             <div className="space-y-3">

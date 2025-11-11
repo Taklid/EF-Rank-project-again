@@ -29,13 +29,12 @@ const Footer = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="text-2xl font-bold text-cyan-400 mb-4"
+            className="text-[20px] font-bold text-cyan-400 mb-4"
           >
-            FoodShop BD
+            UWP EFOOTBALL CLUB 
           </motion.h2>
           <p className="text-sm leading-relaxed">
-            Delicious meals, fresh ingredients, and fast delivery — your favorite food
-            at your fingertips. We make every bite memorable.
+          UWP eFootball Club is a passionate and fast-growing eSports team dedicated to the world of eFootball (PES). Formed by a group of talented and determined players, UWP stands for unity, discipline, and excellence on the virtual pitch.
           </p>
 
           <div className="mt-4 space-y-2 text-sm">
@@ -43,7 +42,7 @@ const Footer = () => {
               <MapPin size={16} className="text-cyan-400" /> Dhaka, Bangladesh
             </p>
             <p className="flex items-center gap-2">
-              <Mail size={16} className="text-cyan-400" /> support@foodshop.com
+              <Mail size={16} className="text-cyan-400" /> support@uwp.com
             </p>
             <p className="flex items-center gap-2">
               <Phone size={16} className="text-cyan-400" /> +880 1234-567890
@@ -104,26 +103,26 @@ const Footer = () => {
 
       {/* 🔹 Bottom Footer */}
       <div className="flex flex-col sm:flex-row justify-between items-center max-w-7xl mx-auto px-6 text-sm text-gray-400 z-10 relative">
-        <p>© {new Date().getFullYear()} FoodShop BD. All Rights Reserved.</p>
+    <p>© {new Date().getFullYear()} UWP Esports Club.</p>
 
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center mt-4 sm:mt-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-purple-500 font-semibold tracking-widest animate-pulse drop-shadow-[0_0_10px_#00ffff]"
-        >
-          @DEVELOPER BY TAKLID AHAMMED
-        </motion.p>
+    <motion.p
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="text-center mt-4 sm:mt-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-purple-500 font-semibold tracking-widest animate-pulse drop-shadow-[0_0_10px_#00ffff]"
+    >
+        @DEVELOPER BY TAKLID AHAMMED
+    </motion.p>
 
-        <motion.button
-          whileHover={{ scale: 1.2, y: -2 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={scrollToTop}
-          className="mt-4 sm:mt-0 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-blue-600 hover:to-cyan-400 text-white px-4 py-2 rounded-full shadow-md"
-        >
-          <ArrowUp size={16} /> Back to Top
-        </motion.button>
-      </div>
+    <motion.button
+        whileHover={{ scale: 1.2, y: -2 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={scrollToTop}
+        className="mt-4 sm:mt-0 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-blue-600 hover:to-cyan-400 text-white px-4 py-2 rounded-full shadow-md"
+    >
+        <ArrowUp size={16} /> Back to Top
+    </motion.button>
+</div>
     </footer>
   );
 };

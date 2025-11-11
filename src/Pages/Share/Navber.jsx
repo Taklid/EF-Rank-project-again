@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Sun, Moon, Menu, X, LogOut } from "lucide-react";
+import { Sun, Moon, Menu, X, LogOut, LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AuthContext } from "../../Provider/AuthProvider"; // তোমার AuthProvider path অনুযায়ী ঠিক করে নেবে
 import clubpic from '../../assets/icon/1000021816.png'
@@ -32,6 +32,15 @@ const Navber = () => {
 
   const links = (
     <>
+
+      <li>
+        <Link
+          to="/"
+          className="font-semibold text-white hover:text-lime-400 transition"
+        >
+          HOME
+        </Link>
+      </li>
       <li>
         <Link
           to="/menu"
@@ -42,27 +51,37 @@ const Navber = () => {
       </li>
       <li>
         <Link
-          to="/order"
-          className="font-semibold text-white hover:text-lime-400 transition"
-        >
-          FOOD ORDER
-        </Link>
-      </li>
-      <li>
-        <Link
-          to="/board"
-          className="font-semibold text-white hover:text-lime-400 transition"
-        >
-          SAVE BOARD
-        </Link>
-      </li>
-      <li>
-        <Link
           to="/form"
           className="font-semibold text-white hover:text-lime-400 transition"
         >
-          SCOREBOARD
+          SCORE BOARD
         </Link>
+      </li>
+       <li>
+        <Link
+          to="/info"
+          className="font-semibold text-white hover:text-lime-400 transition"
+        >
+          PLAYER INFO
+        </Link>
+      </li>
+      <li>
+        <h1
+          to=""
+          className="font-semibold text-white hover:text-lime-400 transition"
+        >
+          PLAYER ORDER
+        </h1>
+      </li>
+
+
+      <li>
+        <h1
+          
+          className="font-semibold text-white hover:text-lime-400 transition"
+        >
+          SAVE BOARD
+        </h1>
       </li>
     </>
   );
@@ -127,15 +146,18 @@ const Navber = () => {
             {/* Logout button */}
             <button
               onClick={handleLogout}
-              className="btn btn-sm bg-lime-400 border-none text-black hover:bg-lime-300 transition duration-300 shadow-md flex items-center gap-1"
+              className="btn btn-sm bg-lime-400 border-none text-black hover:bg-lime-300 transition duration-300 shadow-lg flex items-center gap-1 
+                         hover:shadow-lime-400/80 hover:shadow-2xl" // ✨ গ্লোয়িং এফেক্ট
             >
               <LogOut size={18} /> Logout
             </button>
           </div>
         ) : (
           <Link to="/login">
-            <button className="btn bg-lime-400 border-none text-black hover:bg-lime-300 transition duration-300 shadow-lg">
-              LOGIN
+            <button
+              className=" bg-lime-500 w-[80px]  mx-auto rounded-[5px] gap-2 flex items-center text-black py-2 px-1 shadow-[0_0_20px_#84cc16]" // ✨ গ্লোয়িং এফেক্ট
+            >
+             <LogIn size={18} />LOGIN
             </button>
           </Link>
         )}
@@ -162,10 +184,10 @@ const Navber = () => {
                 <div className="flex  items-center p-4 border-b border-gray-700">
                   <div>
                     <h2 className="text-lime-400 text-xl font-bold tracking-wide">
-                   UWP BD 
-                  </h2>
+                      UWP BD
+                    </h2>
                   </div>
-                   <img className="w-[50px] ml-1" src={clubpic} alt="" />
+                  <img className="w-[50px] ml-1" src={clubpic} alt="" />
                   <button
                     onClick={toggleMenu}
                     className="text-white ml-[90px] hover:text-lime-400 transition"
@@ -218,19 +240,27 @@ const Navber = () => {
                 </ul>
 
                 {/* ✅ Footer Section moved UP */}
-                <div className="p-5 mt-4 border-t border-gray-700">
+                <div className="p-5 mt-4 border-t border-lime-400/50">
                   {user ? (
-                    <button
+                    <motion.button
                       onClick={handleLogout}
-                      className="btn w-full bg-lime-400 border-none text-black hover:bg-lime-300 transition duration-300 shadow-md flex items-center justify-center gap-1"
+                      className="btn w-full bg-teal-400 border-none text-black hover:bg-teal-300 transition duration-300 shadow-xl flex items-center justify-center gap-2 
+                 hover:shadow-teal-400/80 hover:shadow-2xl" // ✨ Teal Glow Added
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <LogOut size={18} /> Logout
-                    </button>
+                      <LogOut size={20} /> Logout
+                    </motion.button>
                   ) : (
                     <Link to="/login" onClick={() => setMenuOpen(false)}>
-                      <button className="btn w-full bg-lime-400 border-none text-black hover:bg-lime-300 transition duration-300 shadow-md">
+                      <motion.button
+                        className="btn w-full bg-pink-700 border-none text-black hover:bg-purple-600 transition duration-300 shadow-xl 
+                 hover:shadow-purple-950 hover:shadow-2xl" // ✨ Teal Glow Added
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
                         LOGIN
-                      </button>
+                      </motion.button>
                     </Link>
                   )}
                 </div>

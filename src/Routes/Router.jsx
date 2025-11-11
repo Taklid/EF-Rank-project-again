@@ -2,11 +2,11 @@ import { createBrowserRouter } from "react-router-dom";
 import Main from "../MainLayout/Main";
 import Home from "../Pages/Home";
 import TaklidMenu from "../Menu/TaklidMenu";
-import OrderFood from "../Pages/Order/OrderFood";
 import Login from "../LoginPage/login";
 import SignIn from "../LoginPage/SignUp";
 import Scoreboard from "../EfootballRank/Scoreboard";
 import PlayerInfo from "../EfootballRank/EFStatus/PlayerInfo";
+import PrivateRoute from "./PrivateRoute";
 
 // import MainBoard from "../EfootballRank/MainBoard";
 
@@ -20,16 +20,20 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <Home></Home>,
+        element: <PrivateRoute>
+          <Home></Home>
+        </PrivateRoute>,
       },
       {
         path: "menu",
-        element: <TaklidMenu></TaklidMenu>,
+        element: <PrivateRoute>
+          <TaklidMenu></TaklidMenu>
+        </PrivateRoute>,
       },
-      {
-        path: "order",
-        element: <OrderFood></OrderFood>,
-      },
+      // {
+      //   path: "order",
+      //   element: <OrderFood></OrderFood>,
+      // },
       {
         path: "login",
         element: <Login></Login>,
@@ -40,12 +44,17 @@ export const router = createBrowserRouter([
       },
       {
         path: 'form',
-        element: <Scoreboard></Scoreboard>
+        element: <PrivateRoute>
+          <Scoreboard></Scoreboard>
+        </PrivateRoute>
       },
       {
         path: 'info',
-        element: <PlayerInfo></PlayerInfo>
+        element: <PrivateRoute>
+          <PlayerInfo></PlayerInfo>
+        </PrivateRoute>
       },
+      
       
 
     ],

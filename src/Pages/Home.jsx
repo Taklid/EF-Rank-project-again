@@ -1,5 +1,6 @@
-import Banner from "./FoodBanner/Banner";
-import FutureItem from "./Future/FutureItem";
+
+import FuturePlayer from "./Future/FuturePlayer";
+import Banner from "./PLAYERBanner/Banner";
 import Food from "./PopulerMenu/Food";
 import CategorySwiper from "./Share/Category/CategorySwiper";
 
@@ -11,7 +12,7 @@ const Home = () => {
            <Banner></Banner>
           <CategorySwiper></CategorySwiper>
           <Food></Food>
-          <FutureItem></FutureItem>
+           <FuturePlayer></FuturePlayer> 
         </div>
     );
 };
