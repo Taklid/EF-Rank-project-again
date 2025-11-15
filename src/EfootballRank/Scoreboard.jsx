@@ -1,636 +1,740 @@
-// Scoreboard.jsx — Full Enhanced Version with Bulk Add, Profile Modal, and Streaks
 import { useState, useEffect, useContext, useMemo } from "react";
 import axios from "axios";
-import { motion, AnimatePresence } from "framer-motion"; // Added AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
 
 import {
-  Sun,
-  Moon,
-  Edit,
-  Trash2,
-  RefreshCcw,
-  Download,
-  ChevronDown,
-  ChevronUp,
-  X,
-  Trophy, // New icon for Streak
-  Zap, // New icon for Modal
+  Sun,
+  Moon,
+  Edit,
+  Trash2,
+  RefreshCcw,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Trophy,
+  Zap,
+  Crown, // 👑 New icon for Man of the Match (MOTM)
 } from "lucide-react";
 import { AuthContext } from "../Provider/AuthProvider";
 
 const API_URL = "https://ef-server-rank-status.vercel.app/matches";
-// http://localhost:13000/
-// https://ef-server-rank-status.vercel.app/matches
-
-// NEW: Modal Component (Inline for simplicity)
-const PlayerStatsModal = ({ playerName, leaderboard, matches, onClose }) => {
-  const stats = leaderboard.find((p) => p.name === playerName);
-
-  const playerMatches = matches
-    .filter((m) => m.player1 === playerName || m.player2 === playerName)
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  if (!stats) return null;
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-      >
-        <motion.div
-          className="bg-gray-800 text-white p-6 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 50, opacity: 0 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex justify-between items-center border-b border-gray-600 pb-3 mb-4">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Zap size={24} /> {playerName}'s Profile
-            </h2>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full hover:bg-gray-700 transition"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Key Stats Summary */}
-          <div className="grid grid-cols-2 gap-4 mb-6 text-center">
-            <StatCard label="Total Points" value={stats.points} color="text-yellow-400" />
-            <StatCard label="Win Percentage" value={`${stats.ratio}%`} color="text-green-400" />
-            <StatCard label="Total Played" value={stats.played} color="text-blue-400" />
-            <StatCard label="Current Streak" value={stats.streak || "N/A"} color={stats.streak?.startsWith('W') ? "text-red-400" : "text-gray-400"} />
-          </div>
-
-          {/* Match History */}
-          <h3 className="text-xl font-semibold mb-3 border-t pt-4 border-gray-600">Match History ({playerMatches.length})</h3>
-          <div className="space-y-2">
-            {playerMatches.slice(0, 10).map((m) => {
-              const isP1 = m.player1 === playerName;
-              const result =
-                m.score1 === m.score2
-                  ? "Draw"
-                  : isP1
-                  ? m.score1 > m.score2
-                    ? "Win"
-                    : "Loss"
-                  : m.score2 > m.score1
-                  ? "Win"
-                  : "Loss";
-
-              const opponent = isP1 ? m.player2 : m.player1;
-              const score = isP1 ? `${m.score1}-${m.score2}` : `${m.score2}-${m.score1}`;
-              
-              let resultClass = "";
-              if (result === "Win") resultClass = "bg-green-600";
-              else if (result === "Loss") resultClass = "bg-red-600";
-              else resultClass = "bg-yellow-600";
-
-              return (
-                <div key={m._id} className="flex justify-between items-center p-3 rounded-lg bg-gray-700">
-                  <span className="text-sm text-gray-400">vs {opponent}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold">{score}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${resultClass}`}>{result}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {playerMatches.length > 10 && <p className="text-center text-gray-500 text-sm">...and {playerMatches.length - 10} more matches</p>}
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
-};
 
 // NEW: Helper component for the modal
 const StatCard = ({ label, value, color }) => (
-  <div className="p-3 bg-gray-700 rounded-lg shadow-md">
-    <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
-    <p className="text-sm text-gray-400 mt-1">{label}</p>
-  </div>
+  <div className="p-3 bg-gray-700 rounded-lg shadow-md">
+    <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
+    <p className="text-sm text-gray-400 mt-1">{label}</p>
+  </div>
 );
 
 
-const Scoreboard = () => {
-  const { user } = useContext(AuthContext);
-  const currentUserEmail = user?.email || "";
-  const adminEmails = ["taklidahammed007@gmail.com", "rahathossain200603@gmail.com"];
+// NEW: Modal Component (Inline for simplicity)
+const PlayerStatsModal = ({ playerName, leaderboard, matches, onClose }) => {
+  const stats = leaderboard.find((p) => p.name === playerName);
 
-  const [role, setRole] = useState("user");
-  const [matches, setMatches] = useState([]);
-  const [form, setForm] = useState({
-    player1: "",
-    player2: "",
-    score1: "",
-    score2: "",
-  });
-  const [bulkText, setBulkText] = useState("");
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("points");
-  const [darkMode, setDarkMode] = useState(() =>
-    localStorage.getItem("darkMode") === "true"
-  );
-  const [editMatch, setEditMatch] = useState(null);
-  const [showMatches, setShowMatches] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [matchPlayerFilter, setMatchPlayerFilter] = useState("all");
-  const [selectedPlayer, setSelectedPlayer] = useState(null); // NEW: State for selected player for modal
-  const perPage = 5;
+  const playerMatches = matches
+    .filter((m) => m.player1 === playerName || m.player2 === playerName)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Detect Admin
-  useEffect(() => {
-    if (adminEmails.includes(currentUserEmail)) setRole("admin");
-    else setRole("user");
-  }, [currentUserEmail]);
-  const isAdmin = role === "admin";
+  if (!stats) return null;
 
-  // Load Matches (Auto Refresh)
-  const fetchMatches = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(API_URL);
-      const sorted = res.data
-        .map((m) => ({
-          _id: m._id,
-          player1: (m.player1 || "Unknown").trim(),
-          player2: (m.player2 || "Unknown").trim(),
-          score1: Number(m.score1 ?? 0),
-          score2: Number(m.score2 ?? 0),
-          date: m.date || new Date().toISOString(),
-        }))
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setMatches(sorted);
-    } catch (err) {
-      console.error(err);
-      Swal.fire("⚠️ Error", "Failed to load matches!", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="bg-gray-800 text-white p-6 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 50, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center border-b border-gray-600 pb-3 mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Zap size={24} /> {playerName}'s Profile
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-gray-700 transition"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
-  useEffect(() => {
-    fetchMatches();
-    const interval = setInterval(fetchMatches, 20000);
-    return () => clearInterval(interval);
-  }, []);
+          {/* Key Stats Summary */}
+          <div className="grid grid-cols-2 gap-4 mb-6 text-center">
+            <StatCard label="Total Points" value={stats.points} color="text-yellow-400" />
+            <StatCard label="Win Percentage" value={`${stats.ratio}%`} color="text-green-400" />
+            <StatCard label="Total Played" value={stats.played} color="text-blue-400" />
+            {/* 👑 MOTM Stat Card Added */}
+            <StatCard label="Man of the Match" value={stats.motm} color="text-yellow-600" />
+            <StatCard label="Current Streak" value={stats.streak || "N/A"} color={stats.streak?.startsWith('W') ? "text-red-400" : "text-gray-400"} />
+          </div>
 
-  // Input Handlers and Form Logic (Unchanged)
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  };
+          {/* Match History */}
+          <h3 className="text-xl font-semibold mb-3 border-t pt-4 border-gray-600">Match History ({playerMatches.length})</h3>
+          <div className="space-y-2">
+            {playerMatches.slice(0, 10).map((m) => {
+              const isP1 = m.player1 === playerName;
+              const result =
+                m.score1 === m.score2
+                  ? "Draw"
+                  : isP1
+                  ? m.score1 > m.score2
+                    ? "Win"
+                    : "Loss"
+                  : m.score2 > m.score1
+                  ? "Win"
+                  : "Loss";
 
-  const resetForm = () => {
-    setEditMatch(null);
-    setForm({ player1: "", player2: "", score1: "", score2: "" });
-  };
+              const opponent = isP1 ? m.player2 : m.player1;
+              const score = isP1 ? `${m.score1}-${m.score2}` : `${m.score2}-${m.score1}`;
+              
+              let resultClass = "";
+              if (result === "Win") resultClass = "bg-green-600";
+              else if (result === "Loss") resultClass = "bg-red-600";
+              else resultClass = "bg-yellow-600";
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.player1.trim() || !form.player2.trim()) {
-      Swal.fire("❗ Validation", "Player names are required.", "warning");
-      return;
-    }
-    if (form.player1.trim() === form.player2.trim()) {
-      Swal.fire("❗ Validation", "Players must be different.", "warning");
-      return;
-    }
-    try {
-      if (editMatch) {
-        await axios.put(`${API_URL}/${editMatch._id}`, {
-          ...form,
-          score1: Number(form.score1),
-          score2: Number(form.score2),
-        });
-        Swal.fire("✅ Updated!", "Match updated successfully!", "success");
-        resetForm();
-      } else {
-        await axios.post(API_URL, {
-          ...form,
-          score1: Number(form.score1),
-          score2: Number(form.score2),
-          date: new Date().toISOString(),
-        });
-        Swal.fire("✅ Added!", "Match added successfully!", "success");
-        setForm({ player1: "", player2: "", score1: "", score2: "" });
-      }
-      fetchMatches();
-    } catch (err) {
-      console.error(err);
-      Swal.fire("❌ Error", "Failed to save match!", "error");
-    }
-  };
-
-  const handleBulkSubmit = async () => {
-  if (!bulkText.trim()) {
-    Swal.fire("❗ Validation", "Please enter matches.", "warning");
-    return;
-  }
-
-  const lines = bulkText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  const bulkData = [];
-
-  // ✅ Regex: "🔑" optional now
-  // Example accepted:
-  // Messi 🔑 3 🆚 2 Ronaldo
-  // Messi 3 🆚 2 Ronaldo
-  const regex = /^(.*?)\s*(?:🔑)?\s*(\d+)\s*🆚\s*(\d+)\s*(.*?)$/;
-
-  for (let line of lines) {
-    const match = line.match(regex);
-    if (!match) {
-      console.warn("❌ Invalid format:", line);
-      continue;
-    }
-
-    const [, player1, score1, score2, player2] = match;
-
-    if (!player1 || !player2 || player1.trim() === player2.trim()) continue;
-
-    bulkData.push({
-      player1: player1.trim(),
-      player2: player2.trim(),
-      score1: Number(score1),
-      score2: Number(score2),
-      date: new Date().toISOString(),
-    });
-  }
-
-  if (bulkData.length === 0) {
-    Swal.fire(
-      "⚠️ No valid matches found!",
-      "Please check your input format.",
-      "info"
-    );
-    return;
-  }
-
-  // ✅ Limit check: 14 matches maximum
-  if (bulkData.length > 14) {
-    Swal.fire(
-      "⚠️ Too many matches!",
-      "You can only add up to 14 matches at a time.",
-      "warning"
-    );
-    return;
-  }
-
-
-  try {
-    await Promise.all(bulkData.map((m) => axios.post(API_URL, m)));
-
-    Swal.fire(
-      "✅ Added!",
-      `${bulkData.length} matches added successfully!`,
-      "success"
-    );
-
-    setBulkText("");
-    fetchMatches();
-  } catch (err) {
-    console.error(err);
-    Swal.fire("❌ Error", "Failed to add bulk matches!", "error");
-  }
+              return (
+                <div key={m._id} className="flex justify-between items-center p-3 rounded-lg bg-gray-700">
+                  <span className="text-sm text-gray-400">vs {opponent}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold">{score}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${resultClass}`}>{result}</span>
+                    {m.motm === playerName && <Crown size={16} className="text-yellow-400" title="Man of the Match"/>}
+                  </div>
+                </div>
+              );
+            })}
+            {playerMatches.length > 10 && <p className="text-center text-gray-500 text-sm">...and {playerMatches.length - 10} more matches</p>}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
 
 
-  const handleDelete = async (id) => {
-    const confirm = await Swal.fire({
-      title: "Delete this match?",
-      text: "This action cannot be undone.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, delete",
-    });
-    if (!confirm.isConfirmed) return;
-    try {
-      await axios.delete(`${API_URL}/${id}`);
-      setMatches((prev) => prev.filter((m) => m._id !== id));
-      Swal.fire("🗑 Deleted!", "Match removed!", "success");
-    } catch (err) {
-      console.error(err);
-      Swal.fire("❌ Error", "Failed to delete!", "error");
-    }
-  };
+const Scoreboard = () => {
+  const { user } = useContext(AuthContext);
+  const currentUserEmail = user?.email || "";
+  const adminEmails = ["taklidahammed007@gmail.com", "rahathossain200603@gmail.com"];
 
-  // NEW: Streak Calculation Function (Memoized for performance)
-  const calculateStreaks = (matches, stats) => {
-    const playerStatsWithStreaks = { ...stats };
-    
-    Object.keys(playerStatsWithStreaks).forEach(playerName => {
-      // Get matches for the current player, sorted by date (most recent first)
-      const playerMatches = matches
-        .filter(m => m.player1 === playerName || m.player2 === playerName)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const [role, setRole] = useState("user");
+  const [matches, setMatches] = useState([]);
+  const [form, setForm] = useState({
+    player1: "",
+    player2: "",
+    score1: "",
+    score2: "",
+    motm: "", // 👑 NEW: Man of the Match field
+  });
+  const [bulkText, setBulkText] = useState("");
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("points");
+  const [darkMode, setDarkMode] = useState(() =>
+    localStorage.getItem("darkMode") === "true"
+  );
+  const [editMatch, setEditMatch] = useState(null);
+  const [showMatches, setShowMatches] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [matchPlayerFilter, setMatchPlayerFilter] = useState("all");
+  const [selectedPlayer, setSelectedPlayer] = useState(null); // NEW: State for selected player for modal
+  const perPage = 5;
 
-      let streakCount = 0;
-      let streakType = null; // 'W', 'L', or 'D'
+  // Detect Admin
+  useEffect(() => {
+    if (adminEmails.includes(currentUserEmail)) setRole("admin");
+    else setRole("user");
+  }, [currentUserEmail]);
+  const isAdmin = role === "admin";
 
-      for (const m of playerMatches) {
-        const isP1 = m.player1 === playerName;
-        let result;
+  // Load Matches (Auto Refresh)
+  const fetchMatches = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(API_URL);
+      const sorted = res.data
+        .map((m) => ({
+          _id: m._id,
+          player1: (m.player1 || "Unknown").trim(),
+          player2: (m.player2 || "Unknown").trim(),
+          score1: Number(m.score1 ?? 0),
+          score2: Number(m.score2 ?? 0),
+          date: m.date || new Date().toISOString(),
+          motm: (m.motm || "").trim(), // 👑 NEW: Fetch MOTM
+        }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      setMatches(sorted);
+    } catch (err) {
+      console.error(err);
+      Swal.fire("⚠️ Error", "Failed to load matches!", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if (m.score1 === m.score2) result = 'D';
-        else if ((isP1 && m.score1 > m.score2) || (!isP1 && m.score2 > m.score1)) result = 'W';
-        else result = 'L';
+  useEffect(() => {
+    fetchMatches();
+    const interval = setInterval(fetchMatches, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
-        if (streakType === null) {
-          streakType = result;
-          streakCount = 1;
-        } else if (result === streakType) {
-          streakCount++;
-        } else {
-          break; // Streak broken
-        }
-      }
+  // Input Handlers and Form Logic (Unchanged)
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  };
 
-      if (streakCount > 0) {
-        playerStatsWithStreaks[playerName].streak = `${streakType}${streakCount}`;
-      } else {
-        playerStatsWithStreaks[playerName].streak = 'N/A';
-      }
-    });
+  // 👑 NEW: MOTM Toggle Handler
+  const handleMotmToggle = (player) => {
+    setForm((f) => ({ 
+      ...f, 
+      motm: f.motm === player ? "" : player // Toggle MOTM
+    }));
+  };
 
-    return playerStatsWithStreaks;
-  };
+  const resetForm = () => {
+    setEditMatch(null);
+    setForm({ player1: "", player2: "", score1: "", score2: "", motm: "" }); // 👑 Reset motm
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.player1.trim() || !form.player2.trim()) {
+      Swal.fire("❗ Validation", "Player names are required.", "warning");
+      return;
+    }
+    if (form.player1.trim() === form.player2.trim()) {
+      Swal.fire("❗ Validation", "Players must be different.", "warning");
+      return;
+    }
+    
+    // 👑 MOTM Validation: If motm is set, it must be player1 or player2
+    if (form.motm && form.motm !== form.player1 && form.motm !== form.player2) {
+      Swal.fire("❗ Validation", "Man of the Match must be one of the two players.", "warning");
+      return;
+    }
+
+    try {
+      const payload = {
+        player1: form.player1.trim(),
+        player2: form.player2.trim(),
+        score1: Number(form.score1),
+        score2: Number(form.score2),
+        motm: form.motm, // 👑 Include MOTM
+      };
+
+      if (editMatch) {
+        await axios.put(`${API_URL}/${editMatch._id}`, payload);
+        Swal.fire("✅ Updated!", "Match updated successfully!", "success");
+        resetForm();
+      } else {
+        await axios.post(API_URL, {
+          ...payload,
+          date: new Date().toISOString(),
+        });
+        Swal.fire("✅ Added!", "Match added successfully!", "success");
+        setForm({ player1: "", player2: "", score1: "", score2: "", motm: "" }); // 👑 Reset motm
+      }
+      fetchMatches();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("❌ Error", "Failed to save match!", "error");
+    }
+  };
+
+  // 👑 FIXED BULK SUBMIT WITH MOTM SUPPORT
+  const handleBulkSubmit = async () => {
+    if (!bulkText.trim()) {
+      Swal.fire("❗ Validation", "Please enter matches.", "warning");
+      return;
+    }
+
+    const lines = bulkText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const bulkData = [];
+
+    // 👑 FIXED MOTM LOGIC: 
+    // Updated Regex:
+    // 1. (.*?): Player 1 Name (non-greedy)
+    // 2. \s*(\u{1F451})?: Optional MOTM Crown for P1 (👑)
+    // 3. \s*(\d+): Score 1
+    // 4. \s*🆚\s*(\d+): Separator and Score 2
+    // 5. \s*(.*?): Player 2 Name (non-greedy)
+    // 6. \s*(\u{1F451})?: Optional MOTM Crown for P2 (👑)
+    // The 'u' flag is essential for Unicode characters like 👑.
+    
+    // This regex is designed to capture the player name even if it includes spaces, and the crown, wherever it is placed.
+    const regex = /^(.*?)\s*(\u{1F451})?\s*(\d+)\s*🆚\s*(\d+)\s*(.*?)\s*(\u{1F451})?$/u;
+
+    for (let line of lines) {
+      const match = line.match(regex);
+      if (!match) {
+        console.warn("❌ Invalid bulk format or failed regex match (Skipping):", line);
+        continue;
+      }
+
+      // Destructure with the new structure:
+      // Index 0: Full match
+      // Index 1: Player 1 Name
+      // Index 2: MOTM Crown for Player 1 (undefined if not present)
+      // Index 3: Score 1
+      // Index 4: Score 2
+      // Index 5: Player 2 Name
+      // Index 6: MOTM Crown for Player 2 (undefined if not present)
+      const [, rawPlayer1, motm1, score1, score2, rawPlayer2, motm2] = match;
+      
+      const player1 = rawPlayer1.trim().replace(/\s*👑\s*$/, ''); // Re-trim in case name parsing captured leading/trailing crown incorrectly
+      const player2 = rawPlayer2.trim().replace(/\s*👑\s*$/, '');
+
+      if (!player1 || !player2 || player1 === player2) {
+        console.warn("❌ Invalid Player Names or Same Players (Skipping):", line);
+        continue;
+      }
+
+      // 👑 MOTM Logic:
+      let motmPlayer = "";
+      
+      // Check for crown presence in the captured groups
+      const isCrown1 = !!motm1;
+      const isCrown2 = !!motm2;
+
+      if (isCrown1 && isCrown2) {
+        // Two crowns in one match is ambiguous, skip it
+        Swal.fire("⚠️ Ambiguity", `Match line: "${line}" has two MOTMs (👑) and will be skipped.`, "warning");
+        continue;
+      } else if (isCrown1) {
+        motmPlayer = player1;
+      } else if (isCrown2) {
+        motmPlayer = player2;
+      }
+      
+      bulkData.push({
+        player1: player1,
+        player2: player2,
+        score1: Number(score1),
+        score2: Number(score2),
+        date: new Date().toISOString(),
+        motm: motmPlayer, // 👑 MOTM is now set correctly
+      });
+    }
+
+    if (bulkData.length === 0) {
+      Swal.fire(
+        "⚠️ No valid matches found!",
+        "Please check your input format (Example: PlayerA 👑 3 🆚 2 PlayerB).",
+        "info"
+      );
+      return;
+    }
+
+    // Limit check: 14 matches maximum
+    if (bulkData.length > 14) {
+      Swal.fire(
+        "⚠️ Too many matches!",
+        "You can only add up to 14 matches at a time.",
+        "warning"
+      );
+      return;
+    }
 
 
-  // Leaderboard Calculation
-  useEffect(() => {
-    const stats = {};
-    matches.forEach((m) => {
-      const s1 = Number(m.score1),
-        s2 = Number(m.score2);
-      // Basic initialization (unchanged)
-      [m.player1, m.player2].forEach(p => {
-        if (!stats[p]) stats[p] = { points: 0, wins: 0, draws: 0, losses: 0, played: 0 };
-        stats[p].played++;
-      });
-      
+    try {
+      await Promise.all(bulkData.map((m) => axios.post(API_URL, m)));
 
-      if (s1 > s2) {
-        stats[m.player1].points += 3;
-        stats[m.player1].wins++;
-        stats[m.player2].losses++;
-      } else if (s2 > s1) {
-        stats[m.player2].points += 3;
-        stats[m.player2].wins++;
-        stats[m.player1].losses++;
-      } else {
-        stats[m.player1].points++;
-        stats[m.player2].points++;
-        stats[m.player1].draws++;
-        stats[m.player2].draws++;
-      }
-    });
+      Swal.fire(
+        "✅ Added!",
+        `${bulkData.length} matches added successfully!`,
+        "success"
+      );
 
-    // Apply streak calculation
-    const statsWithStreaks = calculateStreaks(matches, stats);
+      setBulkText("");
+      fetchMatches();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("❌ Error", "Failed to add bulk matches!", "error");
+    }
+  };
 
-    const sorted = Object.entries(statsWithStreaks)
-      .map(([name, s]) => ({
-        name,
-        ...s,
-        ratio: s.played ? ((s.wins / s.played) * 100).toFixed(1) : "0.0",
-      }))
-      .sort((a, b) => b[sortBy] - a[sortBy]);
 
-    setLeaderboard(sorted);
-  }, [matches, sortBy]); // Recalculate when matches or sortBy changes
+  const handleDelete = async (id) => {
+    const confirm = await Swal.fire({
+      title: "Delete this match?",
+      text: "This action cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete",
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      setMatches((prev) => prev.filter((m) => m._id !== id));
+      Swal.fire("🗑 Deleted!", "Match removed!", "success");
+    } catch (err) {
+      console.error(err);
+      Swal.fire("❌ Error", "Failed to delete!", "error");
+    }
+  };
 
-  // Reset Leaderboard (delete all - Unchanged)
-  const handleReset = async () => {
-    const step1 = await Swal.fire({
-      title: "Reset all matches?",
-      text: "This will permanently delete all matches.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, reset",
-    });
-    if (!step1.isConfirmed) return;
-    try {
-      for (const m of matches) {
-        await axios.delete(`${API_URL}/${m._id}`);
-      }
-      setMatches([]);
-      setLeaderboard([]);
-      Swal.fire("✅ Cleared!", "Leaderboard reset done!", "success");
-    } catch (err) {
-      console.error(err);
-      Swal.fire("❌ Error", "Failed to reset!", "error");
-    }
-  };
+  // Streak Calculation Function
+  const calculateStreaks = (matches, stats) => {
+    const playerStatsWithStreaks = { ...stats };
+    
+    Object.keys(playerStatsWithStreaks).forEach(playerName => {
+      // Get matches for the current player, sorted by date (most recent first)
+      const playerMatches = matches
+        .filter(m => m.player1 === playerName || m.player2 === playerName)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Export CSV (Unchanged)
-  const exportCSV = (data, filename = "export.csv") => {
-    if (!data || data.length === 0) {
-      Swal.fire("⚠️ Empty", "No data to export.", "info");
-      return;
-    }
-    const keys = Object.keys(data[0]);
-    const csvRows = [keys.join(",")];
-    for (const row of data) {
-      csvRows.push(
-        keys
-          .map((k) => {
-            const cell = row[k] ?? "";
-            const safe = String(cell).replace(/"/g, '""');
-            return `"${safe}"`;
-          })
-          .join(",")
-      );
-    }
-    const csv = csvRows.join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+      let streakCount = 0;
+      let streakType = null; // 'W', 'L', or 'D'
 
-  // Theme toggle (Unchanged)
-  const toggleTheme = () => {
-    setDarkMode((prev) => {
-      localStorage.setItem("darkMode", String(!prev));
-      return !prev;
-    });
-  };
+      for (const m of playerMatches) {
+        const isP1 = m.player1 === playerName;
+        let result;
 
-  const theme = darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900";
-  const playerNames = [
-    ...new Set(matches.flatMap((m) => [m.player1, m.player2])),
-  ];
+        if (m.score1 === m.score2) result = 'D';
+        else if ((isP1 && m.score1 > m.score2) || (!isP1 && m.score2 > m.score1)) result = 'W';
+        else result = 'L';
 
-  const topMatch = matches.reduce((top, current) => {
-    const currentScore = current.score1 + current.score2;
-    const topScore = top ? top.score1 + top.score2 : -1;
-    return currentScore > topScore ? current : top;
-  }, null);
+        if (streakType === null) {
+          streakType = result;
+          streakCount = 1;
+        } else if (result === streakType) {
+          streakCount++;
+        } else {
+          break; // Streak broken
+        }
+      }
 
-  // Filtered and Paginated Matches
-  const filteredMatches = matches.filter((m) => {
-    // NEW: Highlight filter logic - also used for pagination/filtering
-    if (matchPlayerFilter === "all") return true;
-    return m.player1 === matchPlayerFilter || m.player2 === matchPlayerFilter;
-  });
-  const paginated = filteredMatches.slice((page - 1) * perPage, page * perPage);
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredMatches.length / perPage)
-  );
+      if (streakCount > 0) {
+        playerStatsWithStreaks[playerName].streak = `${streakType}${streakCount}`;
+      } else {
+        playerStatsWithStreaks[playerName].streak = 'N/A';
+      }
+    });
 
-  const filteredBoard = leaderboard
-    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-    .filter((p) => {
-      if (filter === "winners") return p.wins > p.losses;
-      if (filter === "draws") return p.draws > 0;
-      return true;
-    });
+    return playerStatsWithStreaks;
+  };
 
-  // NEW: Player Profile Modal Handler
-  const handlePlayerClick = (playerName) => {
-    setSelectedPlayer(playerName);
-  };
 
-  return (
-    <div className={`${theme} min-h-screen p-4 sm:p-6 transition-all duration-500`}>
-      <div className="max-w-7xl mx-auto">
-        {/* Player Stats Modal */}
-        {selectedPlayer && (
-          <PlayerStatsModal
-            playerName={selectedPlayer}
-            leaderboard={leaderboard}
-            matches={matches}
-            onClose={() => setSelectedPlayer(null)}
-          />
-        )}
-        {/* --- */}
+  // Leaderboard Calculation (Updated for MOTM)
+  useEffect(() => {
+    const stats = {};
+    matches.forEach((m) => {
+      const s1 = Number(m.score1),
+        s2 = Number(m.score2);
+      
+      // Basic initialization
+      [m.player1, m.player2].forEach(p => {
+        if (!stats[p]) stats[p] = { points: 0, wins: 0, draws: 0, losses: 0, played: 0, motm: 0 }; // 👑 motm: 0 added
+        stats[p].played++;
+      });
+      
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">
-            🏆 Smart Scoreboard
-          </h1>
-          <div className="flex gap-2 items-center">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-full bg-gray-700 hover:scale-105 transition"
-              title="Toggle theme"
-            >
-              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <button
-              onClick={fetchMatches}
-              className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 hover:scale-105 transition text-white"
-              title="Refresh"
-            >
-              <RefreshCcw size={18} />
-            </button>
-            {isAdmin && (
-              <button
-                onClick={handleReset}
-                className="p-2 rounded-full bg-red-600 hover:bg-red-700 hover:scale-105 transition text-white"
-                title="Reset all matches"
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
-          </div>
-        </div>
+      if (s1 > s2) {
+        stats[m.player1].points += 3;
+        stats[m.player1].wins++;
+        stats[m.player2].losses++;
+      } else if (s2 > s1) {
+        stats[m.player2].points += 3;
+        stats[m.player2].wins++;
+        stats[m.player1].losses++;
+      } else {
+        stats[m.player1].points++;
+        stats[m.player2].points++;
+        stats[m.player1].draws++;
+        stats[m.player2].draws++;
+      }
 
-        {/* Admin Form */}
-        {isAdmin && (
-          <div className="mb-6 p-4 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
-            <h2 className="text-xl font-semibold mb-3">Add/Edit Match</h2>
-            <form
-              onSubmit={handleSubmit}
-              className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4"
-            >
-              <input
-                name="player1"
-                list="players"
-                value={form.player1}
-                onChange={handleChange}
-                placeholder="Player 1"
-                className="p-2 rounded bg-gray-700 text-white col-span-2 md:col-span-1"
-              />
-              <input
-                name="player2"
-                list="players"
-                value={form.player2}
-                onChange={handleChange}
-                placeholder="Player 2"
-                className="p-2 rounded bg-gray-700 text-white col-span-2 md:col-span-1"
-              />
-              <input
-                name="score1"
-                type="number"
-                value={form.score1}
-                onChange={handleChange}
-                placeholder="Score 1"
-                className="p-2 rounded bg-gray-700 text-white"
-              />
-              <input
-                name="score2"
-                type="number"
-                value={form.score2}
-                onChange={handleChange}
-                placeholder="Score 2"
-                className="p-2 rounded bg-gray-700 text-white"
-              />
-              <div className="flex gap-2 col-span-2 md:col-span-1">
-                <button
-                  type="submit"
-                  className="bg-green-600 hover:bg-green-700 p-2 rounded font-bold w-full transition"
-                >
-                  {editMatch ? "Update" : "Add"}
-                </button>
-                {(editMatch || form.player1 || form.player2 || form.score1 || form.score2) && (
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="bg-red-500 hover:bg-red-600 p-2 rounded font-medium transition"
-                    title="Reset Form"
-                  >
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
-              <datalist id="players">
-                {playerNames.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </form>
+      // 👑 MOTM Logic: Increment count for the player who was MOTM
+      if (m.motm && stats[m.motm]) {
+        stats[m.motm].motm++;
+      }
+    });
 
-            {/* Bulk Add */}
-            <div className="mt-4">
-              <h3 className="text-lg font-medium mb-2"> Add Total Match</h3>
-              <textarea
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-                placeholder={`Paste multiple matches here, one per line:\nExample:\nAsib Ahmed 🔑 3🆚2 Shahriar Ali`}
-                className="w-full p-2 rounded bg-gray-700 text-white h-32 resize-none"
-              ></textarea>
-              <button
+    // Apply streak calculation
+    const statsWithStreaks = calculateStreaks(matches, stats);
+
+    const sorted = Object.entries(statsWithStreaks)
+      .map(([name, s]) => ({
+        name,
+        ...s,
+        ratio: s.played ? ((s.wins / s.played) * 100).toFixed(1) : "0.0",
+      }))
+      .sort((a, b) => b[sortBy] - a[sortBy]);
+
+    setLeaderboard(sorted);
+  }, [matches, sortBy]); // Recalculate when matches or sortBy changes
+
+  // Reset Leaderboard (delete all - Unchanged)
+  const handleReset = async () => {
+    const step1 = await Swal.fire({
+      title: "Reset all matches?",
+      text: "This will permanently delete all matches.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, reset",
+    });
+    if (!step1.isConfirmed) return;
+    try {
+      for (const m of matches) {
+        await axios.delete(`${API_URL}/${m._id}`);
+      }
+      setMatches([]);
+      setLeaderboard([]);
+      Swal.fire("✅ Cleared!", "Leaderboard reset done!", "success");
+    } catch (err) {
+      console.error(err);
+      Swal.fire("❌ Error", "Failed to reset!", "error");
+    }
+  };
+
+  // Export CSV (Unchanged)
+  const exportCSV = (data, filename = "export.csv") => {
+    if (!data || data.length === 0) {
+      Swal.fire("⚠️ Empty", "No data to export.", "info");
+      return;
+    }
+    const keys = Object.keys(data[0]);
+    const csvRows = [keys.join(",")];
+    for (const row of data) {
+      csvRows.push(
+        keys
+          .map((k) => {
+            const cell = row[k] ?? "";
+            const safe = String(cell).replace(/"/g, '""');
+            return `"${safe}"`;
+          })
+          .join(",")
+      );
+    }
+    const csv = csvRows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Theme toggle (Unchanged)
+  const toggleTheme = () => {
+    setDarkMode((prev) => {
+      localStorage.setItem("darkMode", String(!prev));
+      return !prev;
+    });
+  };
+
+  const theme = darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900";
+  const playerNames = [
+    ...new Set(matches.flatMap((m) => [m.player1, m.player2])),
+  ];
+
+  const topMatch = matches.reduce((top, current) => {
+    const currentScore = current.score1 + current.score2;
+    const topScore = top ? top.score1 + top.score2 : -1;
+    return currentScore > topScore ? current : top;
+  }, null);
+
+  // Filtered and Paginated Matches
+  const filteredMatches = matches.filter((m) => {
+    // NEW: Highlight filter logic - also used for pagination/filtering
+    if (matchPlayerFilter === "all") return true;
+    return m.player1 === matchPlayerFilter || m.player2 === matchPlayerFilter;
+  });
+  const paginated = filteredMatches.slice((page - 1) * perPage, page * perPage);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredMatches.length / perPage)
+  );
+
+  const filteredBoard = leaderboard
+    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((p) => {
+      if (filter === "winners") return p.wins > p.losses;
+      if (filter === "draws") return p.draws > 0;
+      return true;
+    });
+
+  // NEW: Player Profile Modal Handler
+  const handlePlayerClick = (playerName) => {
+    setSelectedPlayer(playerName);
+  };
+
+  return (
+    <div className={`${theme} min-h-screen p-4 sm:p-6 transition-all duration-500`}>
+      <div className="max-w-7xl mx-auto">
+        {/* Player Stats Modal */}
+        {selectedPlayer && (
+          <PlayerStatsModal
+            playerName={selectedPlayer}
+            leaderboard={leaderboard}
+            matches={matches}
+            onClose={() => setSelectedPlayer(null)}
+          />
+        )}
+        {/* --- */}
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">
+            🏆 Smart Scoreboard
+          </h1>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full bg-gray-700 hover:scale-105 transition"
+              title="Toggle theme"
+            >
+              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button
+              onClick={fetchMatches}
+              className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 hover:scale-105 transition text-white"
+              title="Refresh"
+            >
+              <RefreshCcw size={18} />
+            </button>
+            {isAdmin && (
+              <button
+                onClick={handleReset}
+                className="p-2 rounded-full bg-red-600 hover:bg-red-700 hover:scale-105 transition text-white"
+                title="Reset all matches"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Admin Form */}
+        {isAdmin && (
+          <div className="mb-6 p-4 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
+            <h2 className="text-xl font-semibold mb-3">Add/Edit Match</h2>
+            <form
+              onSubmit={handleSubmit}
+              className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4"
+            >
+              {/* Player 1 Input + MOTM Toggle */}
+              <div className="flex col-span-2 md:col-span-1 gap-1">
+                <input
+                  name="player1"
+                  list="players"
+                  value={form.player1}
+                  onChange={handleChange}
+                  placeholder="Player 1"
+                  className="p-2 rounded bg-gray-700 text-white w-full"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleMotmToggle(form.player1)}
+                  className={`p-2 rounded transition ${
+                    form.motm === form.player1
+                      ? "bg-yellow-400 text-black hover:bg-yellow-500"
+                      : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                  }`}
+                  title={`Set ${form.player1 || "Player 1"} as Man of the Match`}
+                  disabled={!form.player1.trim()}
+                >
+                  <Crown size={20} />
+                </button>
+              </div>
+
+              {/* Player 2 Input + MOTM Toggle */}
+              <div className="flex col-span-2 md:col-span-1 gap-1">
+                <input
+                  name="player2"
+                  list="players"
+                  value={form.player2}
+                  onChange={handleChange}
+                  placeholder="Player 2"
+                  className="p-2 rounded bg-gray-700 text-white w-full"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleMotmToggle(form.player2)}
+                  className={`p-2 rounded transition ${
+                    form.motm === form.player2
+                      ? "bg-yellow-400 text-black hover:bg-yellow-500"
+                      : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                  }`}
+                  title={`Set ${form.player2 || "Player 2"} as Man of the Match`}
+                  disabled={!form.player2.trim()}
+                >
+                  <Crown size={20} />
+                </button>
+              </div>
+
+              {/* Score 1 and Score 2 */}
+              <input
+                name="score1"
+                type="number"
+                value={form.score1}
+                onChange={handleChange}
+                placeholder="Score 1"
+                className="p-2 rounded bg-gray-700 text-white"
+              />
+              <input
+                name="score2"
+                type="number"
+                value={form.score2}
+                onChange={handleChange}
+                placeholder="Score 2"
+                className="p-2 rounded bg-gray-700 text-white"
+              />
+
+              {/* Submit/Reset Buttons */}
+              <div className="flex gap-2 col-span-2 md:col-span-1">
+                <button
+                  type="submit"
+                  className="bg-green-600 hover:bg-green-700 p-2 rounded font-bold w-full transition"
+                >
+                  {editMatch ? "Update" : "Add"}
+                </button>
+                {(editMatch || form.player1 || form.player2 || form.score1 || form.score2 || form.motm) && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="bg-red-500 hover:bg-red-600 p-2 rounded font-medium transition"
+                    title="Reset Form"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
+              <datalist id="players">
+                {playerNames.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </form>
+
+            {/* Bulk Add */}
+            <div className="mt-4">
+              <h3 className="text-lg font-medium mb-2"> 👑 Add Total Match (Use '👑' for Man of the Match)</h3>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder={`Paste multiple matches here, one per line:\nExample 1 (Player 1 MOTM):\nAsib Ahmed 👑 3 🆚 2 Shahriar Ali\nExample 2 (Player 2 MOTM):\nRahat 5 🆚 5 Samira 👑`}
+                className="w-full p-2 rounded bg-gray-700 text-white h-32 resize-none"
+              ></textarea>
+            <button
     onClick={handleBulkSubmit}
     className="
         mt-2 
@@ -660,308 +764,315 @@ const Scoreboard = () => {
 >
     <span className="relative z-10">Add Match</span> {/* Text needs to be above the glow */}
 </button>
-            </div>
-          </div>
-        )}
+            </div>
+          </div>
+        )}
 
-        <hr className="my-6 border-gray-700"/>
+        <hr className="my-6 border-gray-700"/>
 
-        {/* Search & Filter */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-4 justify-between items-start sm:items-center p-3 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
-          <input
-            type="text"
-            placeholder="🔍 Search player"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="p-2 rounded bg-gray-700 w-full sm:w-1/4"
-          />
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="p-2 rounded bg-gray-700 text-white"
-            >
-              <option value="all">All Players</option>
-              <option value="winners">Winners Only</option>
-              <option value="draws">Draws Only</option>
-            </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="p-2 rounded bg-gray-700 text-white"
-            >
-              <option value="points">Sort by Points</option>
-              <option value="wins">Sort by Wins</option>
-              <option value="played">Sort by Played</option>
-            </select>
-            <button
-              onClick={() => exportCSV(leaderboard, "leaderboard.csv")}
-              className="p-2 bg-green-700 hover:bg-green-600 rounded flex items-center gap-1 transition text-white"
-            >
-              <Download size={16} /> Leaderboard
-            </button>
-            {/* <button
-              onClick={() => exportCSV(matches, "matches.csv")}
-              className="p-2 bg-indigo-700 hover:bg-indigo-600 rounded flex items-center gap-1 transition text-white"
-            >
-              <Download size={16} /> Matches CSV
-            </button> */}
-          </div>
-        </div>
+        {/* Search & Filter */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4 justify-between items-start sm:items-center p-3 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
+          <input
+            type="text"
+            placeholder="🔍 Search player"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="p-2 rounded bg-gray-700 w-full sm:w-1/4"
+          />
+          <div className="flex flex-wrap gap-3">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="p-2 rounded bg-gray-700 text-white"
+            >
+              <option value="all">All Players</option>
+              <option value="winners">Winners Only</option>
+              <option value="draws">Draws Only</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="p-2 rounded bg-gray-700 text-white"
+            >
+              <option value="points">Sort by Points</option>
+              <option value="wins">Sort by Wins</option>
+              <option value="played">Sort by Played</option>
+              <option value="motm">Sort by MOTM 👑</option> {/* 👑 Sort by MOTM */}
+            </select>
+            <button
+              onClick={() => exportCSV(leaderboard, "leaderboard.csv")}
+              className="p-2 bg-green-700 hover:bg-green-600 rounded flex items-center gap-1 transition text-white"
+            >
+              <Download size={16} /> Leaderboard
+            </button>
+          </div>
+        </div>
 
-        {/* Summary */}
-        <div className="text-center mb-6 space-y-1 p-3 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm text-gray-400">
-            <p className="flex flex-col items-center">
-              <span className="font-bold text-lg text-white">
+        {/* Summary (Unchanged) */}
+      <div className="text-center mb-6 space-y-1 p-3 rounded-lg bg-gray-800/50 dark:bg-gray-700/50">
+    {/* Grid Layout: 2 columns on mobile, 5 columns on desktop */}
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-y-4 gap-x-2 text-sm text-gray-400">
+        
+        {/* 1. Total Players - col-span-1 */}
+        <p className="flex flex-col items-center col-span-1">
+            <span className="font-bold text-lg text-white">
                 {leaderboard.length}
-              </span>
-              <span>Total Players</span>
-            </p>
-            <p className="flex flex-col items-center">
-              <span className="font-bold text-lg text-white">
+            </span>
+            <span>Total Players</span>
+        </p>
+        
+        {/* 2. Matches Played - col-span-1 */}
+        <p className="flex flex-col items-center col-span-1">
+            <span className="font-bold text-lg text-white">
                 {matches.length}{" "}
                 {loading && (
-                  <span className="ml-1 animate-spin inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></span>
+                    <span className="ml-1 animate-spin inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></span>
                 )}
-              </span>
-              <span>Matches Played</span>
-            </p>
-            <p className="flex flex-col items-center col-span-2 sm:col-span-1">
-              <span className="font-bold text-lg text-yellow-400">
-                {leaderboard[0]?.name || "N/A"}
-              </span>
-              <span>
-                Top Scorer ({leaderboard[0]?.points || 0} PTS)
-              </span>
-            </p>
-            <p className="flex flex-col items-center col-span-2 sm:col-span-1">
-              <span className="font-bold text-sm text-white">
-                {topMatch
-                  ? `${topMatch.player1} ${topMatch.score1} - ${topMatch.score2} ${topMatch.player2}`
-                  : "N/A"}
-              </span>
-              <span>Highest Score Match</span>
-            </p>
-            <p className="flex flex-col items-center">
-              <span className="font-bold text-lg text-white">
-                {matches.length
-                  ? (
-                      matches.reduce(
-                        (acc, m) => acc + m.score1 + m.score2,
-                        0
-                      ) /
-                      (matches.length * 2)
-                    ).toFixed(1)
-                  : 0}
-              </span>
-              <span>Avg Score</span>
-            </p>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Last Match:{" "}
-            {matches[0] ? new Date(matches[0].date).toLocaleString() : "N/A"}
-          </p>
-        </div>
-
-        <hr className="my-6 border-gray-700"/>
-
-      {/* Leaderboard */}
-<h2 className="text-2xl font-semibold mb-3 text-center mt-8">
-   Leaderboard
-</h2>
-<div className="space-y-2">
-  {filteredBoard.length === 0 && (
-    <p className="text-center text-gray-400">No players found.</p>
-  )}
-  {filteredBoard.map((p, i) => (
-    <motion.div
-      key={p.name}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`flex flex-col sm:flex-row justify-between items-center p-3 rounded-lg shadow-md transition-all duration-300 
-    ${
-      i === 0
-        ? "bg-yellow-400 text-black font-bold hover:shadow-[0_0_15px_#FFD700] hover:scale-[1.01]"
-        : i === 1
-        ? "bg-gray-500 text-black font-semibold hover:shadow-[0_0_15px_#C0C0C0] hover:scale-[1.01]"
-        : i === 2
-        ? "bg-amber-700 text-white font-semibold hover:shadow-[0_0_15px_#FFBF00] hover:scale-[1.01]"
-        : "bg-gray-700 text-white hover:shadow-[0_0_10px_#00FFFF] hover:scale-[1.01]"
-    }`}
-    >
-      {/* Player Profile Link (Opens Modal) */}
-      <button
-        onClick={() => handlePlayerClick(p.name)}
-        className="mb-2 sm:mb-0 text-lg hover:underline transition font-bold flex items-center gap-2"
-        title="View full player stats"
-      >
-        {i + 1}. {p.name} {i < 3 && ["🥇", "🥈", "🥉"][i]}
-        <Zap size={14} className="text-blue-400"/>
-      </button>
-
-      {/* ✅ CRITICAL FIX: Enhanced Flex Container for Stats */}
-      {/* - flex-wrap: যাতে মোবাইল ভিউতে সব ডেটা এক লাইনে না থাকলে নিচে নেমে যায়।
-        - justify-start: ছোট স্ক্রিনে ডেটাগুলি বাম দিকে শুরু হবে।
-        - gap-x-2: কলামগুলোর মধ্যে আরও কম ফাঁকা জায়গা (মোবাইলের জন্য)।
-        - sm:gap-x-4: বড় স্ক্রিনে ফাঁকা জায়গা বাড়বে।
-      */}
-      <div className="flex flex-wrap justify-start sm:justify-end gap-x-2 sm:gap-x-4 gap-y-2 text-center text-sm">
+            </span>
+            <span>Matches Played</span>
+        </p>
         
-        {/* Streak Display - w-10 করে দেওয়া হলো */}
-        <div className="flex flex-col w-10">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">STRK</span>
-          <span className={`font-bold ${p.streak?.startsWith('W') ? 'text-green-500' : p.streak?.startsWith('L') ? 'text-red-500' : 'text-yellow-500'}`}>
-            {p.streak}
-          </span>
-        </div>
-
-        {/* Points */}
-        <div className="flex flex-col w-12">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">PTS</span>
-          <span
-            className={`font-bold ${
-              i === 0 ? "text-red-400" : "text-yellow-400"
-            }`}
-          >
-            {p.points}
-          </span>
-        </div>
-
-        {/* ✅ WINS (W) - w-6 করে দেওয়া হলো */}
-        <div className="flex flex-col w-10 md:w-10 text-center">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">W</span>
-          <span className="font-bold">{p.wins}</span>
-        </div>
-
-        {/* ✅ DRAWS (D) - w-6 করে দেওয়া হলো */}
-        <div className="flex flex-col w-10 md:w-10 text-center">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">D</span>
-          <span className="font-bold">{p.draws}</span>
-        </div>
-
-        {/* ✅ LOSSES (L) - w-6 করে দেওয়া হলো */}
-        <div className="flex flex-col w-10 md:w-10 text-center">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">L</span>
-          <span className="font-bold">{p.losses}</span>
-        </div>
-
-        {/* ✅ PLAYED (P) - w-6 করে দেওয়া হলো এবং PLD কে P করা হলো */}
-        <div className="flex flex-col  w-10 md:w-12 text-center">
-          {/* Mobile: Use 'P' (ALWAYS visible) */}
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">PLD</span>
-          <span className="font-bold">{p.played}</span>
-        </div>
-
-        {/* WIN RATIO (W%) - w-12 করে দেওয়া হলো */}
-        <div className="flex flex-col w-10 md:w-12 text-center">
-          <span className="font-semibold text-gray-400 dark:text-gray-400 text-xs">W%</span>
-          <span className="font-bold text-sm">{p.ratio}%</span>
-        </div>
-      </div>
-    </motion.div>
-  ))}
+        {/* 3. Top Scorer - col-span-1 */}
+        <p className="flex flex-col items-center col-span-1">
+            <span className="font-bold text-lg text-yellow-400">
+                {leaderboard[0]?.name || "N/A"}
+            </span>
+            <span>
+                Top Scorer ({leaderboard[0]?.points || 0} PTS)
+            </span>
+        </p>
+        
+        {/* 4. Highest Score Match - col-span-1 */}
+        <p className="flex flex-col items-center col-span-1">
+            <span className="font-bold text-sm text-white">
+                {topMatch
+                    ? `${topMatch.player1} ${topMatch.score1} - ${topMatch.score2} ${topMatch.player2}`
+                    : "N/A"}
+            </span>
+            <span>Highest Score Match</span>
+        </p>
+        
+        {/* 5. Avg Score - CRITICAL CHANGE: col-span-2 on mobile for full width center */}
+        <p className="flex flex-col items-center col-span-2 sm:col-span-1">
+            <span className="font-bold text-lg text-blue-500">
+                {matches.length
+                    ? (
+                          matches.reduce(
+                              (acc, m) => acc + m.score1 + m.score2,
+                              0
+                          ) /
+                          (matches.length * 2)
+                      ).toFixed(1)
+                    : 0}
+            </span>
+            <span>Avg Score</span>
+        </p>
+    </div>
+    
+    {/* Last Match Date */}
+    <p className="text-xs text-gray-500 mt-2">
+        Last Match:{" "}
+        {matches[0] ? new Date(matches[0].date).toLocaleString() : "N/A"}
+    </p>
 </div>
 
-        <hr className="my-6 border-gray-700"/>
+        <hr className="my-6 border-gray-700"/>
 
-        {/* Recent Matches */}
-        <div className="mt-10">
-          <button
-            onClick={() => setShowMatches(!showMatches)}
-            className="flex items-center gap-1 mx-auto mb-4 font-semibold text-lg hover:text-blue-400 transition"
+      {/* Leaderboard (Updated for MOTM) */}
+<h2 className="text-2xl font-semibold mb-4 text-center text-gray-100">
+        🏆 Leaderboard
+      </h2>
+
+      <div className="space-y-3">
+        {filteredBoard.length === 0 && (
+          <p className="text-center text-gray-400 text-sm sm:text-base">
+            No players found.
+          </p>
+        )}
+
+        {filteredBoard.map((p, i) => (
+          <motion.div
+            key={p.name}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.05 }}
+            className={`flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-xl shadow-md transition-all duration-300
+              ${
+                i === 0
+                  ? "bg-yellow-400 text-black font-bold hover:shadow-[0_0_15px_#FFD700]"
+                  : i === 1
+                  ? "bg-gray-400 text-black font-semibold hover:shadow-[0_0_15px_#C0C0C0]"
+                  : i === 2
+                  ? "bg-amber-700 text-white font-semibold hover:shadow-[0_0_15px_#FFBF00]"
+                  : "bg-gray-800 text-white hover:shadow-[0_0_10px_#00FFFF]"
+              } hover:scale-[1.01]`}
           >
-             Recent Matches {showMatches ? <ChevronUp /> : <ChevronDown />}
-          </button>
-          {showMatches && (
-            <div className="space-y-3">
-              {/* Match Player Filter */}
-              <div className="flex justify-center mb-4">
-                <select
-                  value={matchPlayerFilter}
-                  onChange={(e) => {
-                    setMatchPlayerFilter(e.target.value);
-                    setPage(1); // Reset page on filter change
-                  }}
-                  className="p-2 rounded bg-gray-700 text-white"
-                >
-                  <option value="all">Filter by Player (All)</option>
-                  {playerNames.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+            {/* Player Name + Icon */}
+            <button
+              onClick={() => handlePlayerClick(p.name)}
+              className="flex items-center justify-center sm:justify-start gap-2 mb-3 sm:mb-0 text-lg font-bold hover:underline transition text-center sm:text-left"
+              title="View player stats"
+            >
+              {i + 1}. {p.name} {i < 3 && ["🥇", "🥈", "🥉"][i]}
+              <Zap size={16} className="text-blue-400" />
+            </button>
+
+            {/* Stats Section - single line scrollable */}
+            <div className="flex items-center justify-center sm:justify-end gap-3 sm:gap-5 overflow-x-auto scrollbar-hide text-sm w-full sm:w-auto py-1">
+              {/* MOTM */}
+              <div className="flex flex-col items-center min-w-[50px]">
+                <span className="text-gray-300 text-xs">MOTM</span>
+                <span className="font-bold text-yellow-500 flex justify-center items-center gap-1">
+                  {p.motm}
+                  {p.motm > 0 && <Crown size={14} className="text-yellow-600" />}
+                </span>
               </div>
 
-              {paginated.length === 0 && (
-                <p className="text-center text-gray-400">
-                  No matches found for the current filter.
-                </p>
-              )}
-              {paginated.map((m) => {
-                const isFiltered =
-                  matchPlayerFilter !== "all" &&
-                  (m.player1 === matchPlayerFilter || m.player2 === matchPlayerFilter);
+              {/* STRK */}
+              <div className="flex flex-col items-center min-w-[50px]">
+                <span className="text-gray-300 text-xs">STRK</span>
+                <span
+                  className={`font-bold ${
+                    p.streak?.startsWith("W")
+                      ? "text-green-400"
+                      : p.streak?.startsWith("L")
+                      ? "text-red-400"
+                      : "text-yellow-400"
+                  }`}
+                >
+                  {p.streak}
+                </span>
+              </div>
 
-                const baseClass = "p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center";
-                // NEW: Match Highlighting based on filter
-                const highlightClass = isFiltered
-                  ? "bg-purple-800 border-2 border-purple-400"
-                  : "bg-gray-700";
+              {/* PTS */}
+              <div className="flex flex-col items-center min-w-[40px]">
+                <span className="text-gray-300 text-xs">PTS</span>
+                <span className="font-bold">{p.points}</span>
+              </div>
 
-                return (
-                  <motion.div
-                    key={m._id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`${baseClass} ${highlightClass}`}
-                  >
-                    <div className="mb-2 sm:mb-0 flex flex-col">
-                      <div className="text-base sm:text-lg">
-                        {/* Player Link for Modal */}
-                        <button
-                          onClick={() => handlePlayerClick(m.player1)}
-                          className="font-bold hover:underline"
-                          title="View stats"
+              {/* Played */}
+              <div className="flex flex-col items-center min-w-[30px]">
+                <span className="text-gray-300 text-xs">P</span>
+                <span className="font-bold">{p.played}</span>
+              </div>
+
+              {/* Wins */}
+              <div className="flex flex-col items-center min-w-[30px]">
+                <span className="text-gray-300 text-xs">W</span>
+                <span className="font-bold text-green-400">{p.wins}</span>
+              </div>
+
+              {/* Losses */}
+              <div className="flex flex-col items-center min-w-[30px]">
+                <span className="text-gray-300 text-xs">L</span>
+                <span className="font-bold text-red-400">{p.losses}</span>
+              </div>
+
+              {/* Draws */}
+              <div className="flex flex-col items-center min-w-[30px]">
+                <span className="text-gray-300 text-xs">D</span>
+                <span className="font-bold text-blue-400">{p.draws}</span>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+        <hr className="my-6 border-gray-700" />
+
+      <h2
+        className="text-2xl font-semibold mb-3 flex  justify-between items-center cursor-pointer select-none"
+        onClick={() => setShowMatches((p) => !p)}
+      >
+        Recent Match History
+        {showMatches ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+      </h2>
+
+      <AnimatePresence>
+        {showMatches && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Player Filter */}
+            <div className="mb-4">
+              <select
+                value={matchPlayerFilter}
+                onChange={(e) => setMatchPlayerFilter(e.target.value)}
+                className="p-2 rounded bg-gray-700 text-white w-full sm:w-auto"
+              >
+                <option value="all">All Matches</option>
+                {playerNames.map((p) => (
+                  <option key={p} value={p}>
+                    {p}'s Matches
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Matches List */}
+            <div className="space-y-3">
+              {paginated.length === 0 ? (
+                <p className="text-center text-gray-400">No matches found.</p>
+              ) : (
+                paginated.map((m) => {
+                  const winner =
+                    m.score1 > m.score2
+                      ? m.player1
+                      : m.score2 > m.score1
+                      ? m.player2
+                      : "Draw";
+                  const isDraw = winner === "Draw";
+
+                  return (
+                    <div
+                      key={m._id}
+                      className={`p-3 rounded-lg flex flex-col sm:flex-row justify-between items-center transition-all duration-300 gap-2
+                        ${
+                          isDraw
+                            ? "bg-blue-900/40 border border-blue-700"
+                            : "bg-gray-800/50 border border-gray-700"
+                        }`}
+                    >
+                      {/* Name + Score + MOTM */}
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+                        <span
+                          className={`font-bold ${
+                            m.player1 === winner && !isDraw
+                              ? "text-green-400"
+                              : "text-gray-200"
+                          }`}
                         >
                           {m.player1}
-                        </button>{" "}
-                        🆚{" "}
-                        <button
-                          onClick={() => handlePlayerClick(m.player2)}
-                          className="font-bold hover:underline"
-                          title="View stats"
+                        </span>
+                        {m.motm === m.player1 && (
+                          <Crown size={20} className="text-yellow-400" title="Man of the Match" />
+                        )}
+                        <span className="text-sm font-semibold">
+                          {m.score1} 🆚 {m.score2}
+                        </span>
+                        <span
+                          className={`font-bold ${
+                            m.player2 === winner && !isDraw
+                              ? "text-green-400"
+                              : "text-gray-200"
+                          }`}
                         >
                           {m.player2}
-                        </button>
+                        </span>
+                        {m.motm === m.player2 && (
+                          <Crown size={20} className="text-yellow-400" title="Man of the Match" />
+                        )}
                       </div>
-                      <p className="text-xs text-gray-400">
-                        {new Date(m.date).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold text-xl">
-                        {m.score1}-{m.score2}
-                      </span>
-                      {/* Match Status Indicator (Unchanged) */}
-                      <span
-                        className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
-                          m.score1 === m.score2
-                            ? "bg-yellow-800 text-yellow-300"
-                            : m.score1 > m.score2
-                            ? "bg-green-800 text-green-300"
-                            : "bg-red-800 text-red-300"
-                        }`}
-                      >
-                        {m.score1 === m.score2
-                          ? "Draw"
-                          : m.score1 > m.score2
-                          ? "P1 Win"
-                          : "P2 Win"}
-                      </span>
-                      {isAdmin && (
-                        <>
+
+                      {/* Date + Admin buttons */}
+                      <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap mt-2 sm:mt-0">
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {new Date(m.date).toLocaleString()}
+                        </span>
+                        {isAdmin && (
                           <button
                             onClick={() => {
                               setEditMatch(m);
@@ -970,52 +1081,60 @@ const Scoreboard = () => {
                                 player2: m.player2,
                                 score1: m.score1,
                                 score2: m.score2,
+                                motm: m.motm,
                               });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
-                            className="p-2 bg-blue-500 hover:bg-blue-600 rounded transition"
-                            title="Edit"
+                            className="p-2 rounded-full text-blue-400 hover:bg-gray-700 transition"
+                            title="Edit Match"
                           >
-                            <Edit size={16} />
+                            <Edit size={20} />
                           </button>
+                        )}
+                        {isAdmin && (
                           <button
                             onClick={() => handleDelete(m._id)}
-                            className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
-                            title="Delete"
+                            className="p-2 rounded-full text-red-400 hover:bg-gray-700 transition"
+                            title="Delete Match"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={20} />
                           </button>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </motion.div>
-                );
-              })}
-              {/* Pagination (Unchanged) */}
-              <div className="flex justify-center gap-3 mt-4">
+                  );
+                })
+              )}
+            </div>
+
+            {/* Pagination */}
+            {filteredMatches.length > perPage && (
+              <div className="flex justify-center items-center gap-4 mt-4 flex-wrap">
                 <button
-                  disabled={page === 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-40 transition"
+                  disabled={page === 1}
+                  className="p-2 rounded bg-gray-700 disabled:opacity-50"
                 >
-                  Prev
+                  Previous
                 </button>
-                <span className="px-3 py-2 text-lg">
-                  {page}/{totalPages}
+                <span className="text-gray-400">
+                  Page {page} of {totalPages}
                 </span>
                 <button
-                  disabled={page === totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-40 transition"
+                  disabled={page === totalPages}
+                  className="p-2 rounded bg-gray-700 disabled:opacity-50"
                 >
                   Next
                 </button>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </div>
+    </div>
+  );
 };
 
 export default Scoreboard;
@@ -1023,1272 +1142,5 @@ export default Scoreboard;
 
 
 
-//   -------------------pore update korbo ------------
 
-// /// Scoreboard.jsx — Full Enhanced Version v2.0 with ELO, Chart, and Date Filter
-// import { useState, useEffect, useContext, useMemo } from "react";
-// import axios from "axios";
-// import { motion, AnimatePresence } from "framer-motion";
-// import Swal from "sweetalert2";
-// import {
-//   Sun,
-//   Moon,
-//   Edit,
-//   Trash2,
-//   RefreshCcw,
-//   Download,
-//   ChevronDown,
-//   ChevronUp,
-//   X,
-//   Zap,
-//   Star,
-//   Filter, // New icon for filter
-//   Calendar, // New icon for date
-// } from "lucide-react";
-// // Import Chart.js components
-// import { Line } from 'react-chartjs-2';
-// import {
-//   Chart as ChartJS,
-//   CategoryScale,
-//   LinearScale,
-//   PointElement,
-//   LineElement,
-//   Title,
-//   Tooltip,
-//   Legend,
-// } from 'chart.js';
 
-// // Register Chart.js components
-// ChartJS.register(
-//   CategoryScale,
-//   LinearScale,
-//   PointElement,
-//   LineElement,
-//   Title,
-//   Tooltip,
-//   Legend
-// );
-
-// import { AuthContext } from "../Provider/AuthProvider";
-
-// const API_URL = "http://localhost:13000/matches";
-// const INITIAL_ELO = 1000;
-// const K_FACTOR = 32;
-
-// // ELO Calculation Helper (Unchanged)
-// const calculateElo = (rating1, rating2, score1, score2) => {
-//   // ... (previous calculateElo function remains here)
-//   const expectedScore1 = 1 / (1 + Math.pow(10, (rating2 - rating1) / 400));
-//   const expectedScore2 = 1 / (1 + Math.pow(10, (rating1 - rating2) / 400));
-
-//   let actualScore1 = 0.5; // Draw
-//   let actualScore2 = 0.5;
-
-//   if (score1 > score2) {
-//     actualScore1 = 1; // Player 1 wins
-//     actualScore2 = 0;
-//   } else if (score2 > score1) {
-//     actualScore1 = 0; // Player 2 wins
-//     actualScore2 = 1;
-//   }
-
-//   const newRating1 = rating1 + K_FACTOR * (actualScore1 - expectedScore1);
-//   const newRating2 = rating2 + K_FACTOR * (actualScore2 - expectedScore2);
-
-//   return { newRating1: Math.round(newRating1), newRating2: Math.round(newRating2) };
-// };
-
-// // NEW: Player Graph Component
-// const PlayerPerformanceChart = ({ matches, playerName }) => {
-//   // Process matches to get ELO history points
-//   const eloHistory = [{ elo: INITIAL_ELO, date: 'Start' }]; 
-//   let currentElo = INITIAL_ELO;
-
-//   const playerMatches = matches
-//     .filter((m) => m.player1 === playerName || m.player2 === playerName)
-//     .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-//   playerMatches.forEach((m) => {
-//     const isP1 = m.player1 === playerName;
-//     const oppName = isP1 ? m.player2 : m.player1;
-
-//     // Use the recorded ELO changes if available, otherwise calculate from the last known ELO
-//     let newElo;
-//     if (isP1) {
-//         newElo = currentElo + m.eloChange1; // Assuming eloChange1/2 stores the change amount
-//     } else {
-//         newElo = currentElo + m.eloChange2;
-//     }
-    
-//     // Fallback: If eloChange is 0 or not reliable, you might need to re-run the full ELO chain
-//     // For simplicity here, we assume the match object holds the correct delta or we recalculate:
-    
-//     // We will trust the full ELO recalculation in the main component for simplicity and accuracy
-//     // But for the sake of the chart, let's just log the change point.
-//     // **NOTE**: For accurate chain, full chronological processing (as done in calculateLeaderboard) is best.
-
-//     const dateLabel = new Date(m.date).toLocaleDateString();
-    
-//     if (m.eloChange1 !== undefined) {
-//         currentElo = isP1 ? (currentElo + m.eloChange1) : (currentElo + m.eloChange2);
-//         eloHistory.push({ elo: currentElo, date: dateLabel });
-//     }
-//   });
-
-//   // Prepare Chart Data
-//   const data = {
-//     labels: eloHistory.map(h => h.date),
-//     datasets: [
-//       {
-//         label: `${playerName}'s ELO Rating`,
-//         data: eloHistory.map(h => h.elo),
-//         fill: false,
-//         backgroundColor: 'rgb(255, 193, 7)', // Yellow
-//         borderColor: 'rgba(255, 193, 7, 0.8)',
-//         tension: 0.3,
-//         pointRadius: 4,
-//         pointHoverRadius: 6,
-//       },
-//     ],
-//   };
-
-//   const options = {
-//     responsive: true,
-//     maintainAspectRatio: false,
-//     plugins: {
-//       legend: { display: false },
-//       title: {
-//         display: true,
-//         text: 'ELO Performance Over Time',
-//         color: '#ccc',
-//       },
-//       tooltip: {
-//         callbacks: {
-//           title: (tooltipItem) => tooltipItem[0].label,
-//           label: (tooltipItem) => `ELO: ${tooltipItem.formattedValue}`,
-//         }
-//       }
-//     },
-//     scales: {
-//       x: {
-//         title: { display: true, text: 'Match Sequence', color: '#888' },
-//         ticks: { color: '#bbb' },
-//         grid: { color: 'rgba(255, 255, 255, 0.1)' }
-//       },
-//       y: {
-//         title: { display: true, text: 'ELO Rating', color: '#888' },
-//         ticks: { color: '#bbb' },
-//         grid: { color: 'rgba(255, 255, 255, 0.1)' },
-//         min: 900, // Better scale
-//       },
-//     },
-//   };
-
-//   return (
-//     <div className="w-full h-80">
-//       <Line data={data} options={options} />
-//     </div>
-//   );
-// };
-
-
-// // PlayerStatsModal Component (Updated to include the chart)
-// const PlayerStatsModal = ({ playerName, leaderboard, matches, onClose }) => {
-//   const stats = leaderboard.find((p) => p.name === playerName);
-
-//   const playerMatches = matches
-//     .filter((m) => m.player1 === playerName || m.player2 === playerName)
-//     .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-//   if (!stats) return null;
-
-//   return (
-//     <AnimatePresence>
-//       <motion.div
-//         className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4"
-//         initial={{ opacity: 0 }}
-//         animate={{ opacity: 1 }}
-//         exit={{ opacity: 0 }}
-//         onClick={onClose}
-//       >
-//         <motion.div
-//           className="bg-gray-800 text-white p-6 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
-//           initial={{ y: 50, opacity: 0 }}
-//           animate={{ y: 0, opacity: 1 }}
-//           exit={{ y: 50, opacity: 0 }}
-//           onClick={(e) => e.stopPropagation()}
-//         >
-//           <div className="flex justify-between items-center border-b border-gray-600 pb-3 mb-4">
-//             <h2 className="text-2xl font-bold flex items-center gap-2 text-yellow-400">
-//               <Zap size={24} /> {playerName}'s Profile
-//             </h2>
-//             <button
-//               onClick={onClose}
-//               className="p-2 rounded-full hover:bg-gray-700 transition"
-//             >
-//               <X size={20} />
-//             </button>
-//           </div>
-
-//           {/* Key Stats Summary */}
-//           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-center">
-//             <StatCard label="ELO Rating" value={stats.elo} color="text-red-400" icon={<Star size={20} />} />
-//             <StatCard label="Total Points" value={stats.points} color="text-yellow-400" />
-//             <StatCard label="Win %" value={`${stats.ratio}%`} color="text-green-400" />
-//             <StatCard label="Streak" value={stats.streak || "N/A"} color={stats.streak?.startsWith('W') ? "text-red-400" : "text-gray-400"} />
-//           </div>
-          
-//           {/* NEW: Performance Chart */}
-//           <div className="mb-6 p-4 bg-gray-700 rounded-lg">
-//             <PlayerPerformanceChart matches={matches} playerName={playerName} />
-//           </div>
-
-//           {/* Match History (Unchanged) */}
-//           <h3 className="text-xl font-semibold mb-3 border-t pt-4 border-gray-600">
-//             Recent Match History ({playerMatches.length})
-//           </h3>
-//           <div className="w-full overflow-x-auto">
-//             <table className="min-w-full divide-y divide-gray-600">
-//               <thead>
-//                 <tr className="text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-//                   <th className="px-1 py-1 sm:px-3">Opponent</th>
-//                   <th className="px-1 py-1 sm:px-3 text-center">Score</th>
-//                   <th className="px-1 py-1 sm:px-3 text-center">Result</th>
-//                   <th className="px-1 py-1 sm:px-3 text-right">ELO Change</th>
-//                 </tr>
-//               </thead>
-//               <tbody className="divide-y divide-gray-700">
-//                 {playerMatches.slice(0, 10).map((m) => {
-//                   const isP1 = m.player1 === playerName;
-//                   const result =
-//                     m.score1 === m.score2
-//                       ? "Draw"
-//                       : isP1
-//                       ? m.score1 > m.score2
-//                         ? "Win"
-//                         : "Loss"
-//                       : m.score2 > m.score1
-//                       ? "Win"
-//                       : "Loss";
-
-//                   const opponent = isP1 ? m.player2 : m.player1;
-//                   const score = isP1 ? `${m.score1}-${m.score2}` : `${m.score2}-${m.score1}`;
-//                   const eloChange = isP1 ? m.eloChange1 : m.eloChange2;
-                  
-//                   let resultClass = "";
-//                   if (result === "Win") resultClass = "bg-green-600";
-//                   else if (result === "Loss") resultClass = "bg-red-600";
-//                   else resultClass = "bg-yellow-600";
-                  
-//                   const eloSign = eloChange > 0 ? "+" : "";
-//                   const eloColor = eloChange > 0 ? "text-green-400" : eloChange < 0 ? "text-red-400" : "text-gray-400";
-
-//                   return (
-//                     <tr key={m._id} className="hover:bg-gray-700 transition">
-//                       <td className="px-1 py-2 sm:px-3 whitespace-nowrap text-sm font-medium text-white">{opponent}</td>
-//                       <td className="px-1 py-2 sm:px-3 whitespace-nowrap text-center font-bold">{score}</td>
-//                       <td className="px-1 py-2 sm:px-3 whitespace-nowrap text-center">
-//                         <span className={`text-xs px-2 py-0.5 rounded-full ${resultClass}`}>{result}</span>
-//                       </td>
-//                       <td className={`px-1 py-2 sm:px-3 whitespace-nowrap text-right font-semibold ${eloColor}`}>
-//                         {eloSign}{eloChange}
-//                       </td>
-//                     </tr>
-//                   );
-//                 })}
-//               </tbody>
-//             </table>
-//           </div>
-
-//           {playerMatches.length > 10 && (
-//             <p className="text-center text-gray-500 text-sm mt-3">...and {playerMatches.length - 10} more matches</p>
-//           )}
-//         </motion.div>
-//       </motion.div>
-//     </AnimatePresence>
-//   );
-// };
-
-// // StatCard Component (Unchanged)
-// const StatCard = ({ label, value, color, icon }) => (
-//   <div className="p-3 bg-gray-700 rounded-lg shadow-md flex flex-col items-center">
-//     <div className={`text-2xl font-extrabold ${color} flex items-center gap-1`}>
-//       {icon} {value}
-//     </div>
-//     <p className="text-xs sm:text-sm text-gray-400 mt-1">{label}</p>
-//   </div>
-// );
-
-
-// const Scoreboard = () => {
-//   const { user } = useContext(AuthContext);
-//   const currentUserEmail = user?.email || "";
-//   const adminEmails = ["taklidahammed007@gmail.com", "admin@example.com"];
-
-//   const [role, setRole] = useState("user");
-//   const [matches, setMatches] = useState([]);
-//   const [form, setForm] = useState({
-//     player1: "",
-//     player2: "",
-//     score1: "",
-//     score2: "",
-//   });
-//   const [bulkText, setBulkText] = useState("");
-//   const [leaderboard, setLeaderboard] = useState([]);
-//   const [search, setSearch] = useState("");
-//   const [filter, setFilter] = useState("all");
-//   const [sortBy, setSortBy] = useState("elo");
-//   const [darkMode, setDarkMode] = useState(() =>
-//     localStorage.getItem("darkMode") === "true"
-//   );
-//   const [editMatch, setEditMatch] = useState(null);
-//   const [showMatches, setShowMatches] = useState(true);
-//   const [loading, setLoading] = useState(false);
-//   const [page, setPage] = useState(1);
-//   const [matchPlayerFilter, setMatchPlayerFilter] = useState("all");
-//   const [selectedPlayer, setSelectedPlayer] = useState(null);
-//   const [dateRange, setDateRange] = useState({ start: "", end: "" }); // NEW Date Range
-//   const perPage = 5;
-
-//   // Detect Admin (Unchanged)
-//   useEffect(() => {
-//     if (adminEmails.includes(currentUserEmail)) setRole("admin");
-//     else setRole("user");
-//   }, [currentUserEmail]);
-//   const isAdmin = role === "admin";
-
-//   // Load Matches (Unchanged)
-//   const fetchMatches = async () => {
-//     // ... (previous fetchMatches function remains here)
-//     setLoading(true);
-//     try {
-//       const res = await axios.get(API_URL);
-//       const sorted = res.data
-//         .map((m) => ({
-//           _id: m._id,
-//           player1: (m.player1 || "Unknown").trim(),
-//           player2: (m.player2 || "Unknown").trim(),
-//           score1: Number(m.score1 ?? 0),
-//           score2: Number(m.score2 ?? 0),
-//           date: m.date || new Date().toISOString(),
-//           eloChange1: Number(m.eloChange1 ?? 0),
-//           eloChange2: Number(m.eloChange2 ?? 0),
-//         }))
-//         .sort((a, b) => new Date(b.date) - new Date(a.date));
-//       setMatches(sorted);
-//     } catch (err) {
-//       console.error(err);
-//       Swal.fire("⚠️ Error", "Failed to load matches!", "error");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchMatches();
-//     const interval = setInterval(fetchMatches, 20000);
-//     return () => clearInterval(interval);
-//   }, []);
-
-//   // Form Handlers (Unchanged)
-//   const handleChange = (e) => {
-//     const { name, value } = e.target;
-//     setForm((f) => ({ ...f, [name]: value }));
-//   };
-
-//   const resetForm = () => {
-//     setEditMatch(null);
-//     setForm({ player1: "", player2: "", score1: "", score2: "" });
-//   };
-
-//   const handleSubmit = async (e) => {
-//     // ... (previous handleSubmit function remains here)
-//     e.preventDefault();
-//     if (!form.player1.trim() || !form.player2.trim()) {
-//       Swal.fire("❗ Validation", "Player names are required.", "warning");
-//       return;
-//     }
-//     if (form.player1.trim() === form.player2.trim()) {
-//       Swal.fire("❗ Validation", "Players must be different.", "warning");
-//       return;
-//     }
-    
-//     let eloChange1 = 0, eloChange2 = 0;
-//     if (!editMatch) {
-//         const tempBoard = calculateLeaderboard(matches, leaderboard);
-//         const p1Elo = tempBoard.find(p => p.name === form.player1)?.elo || INITIAL_ELO;
-//         const p2Elo = tempBoard.find(p => p.name === form.player2)?.elo || INITIAL_ELO;
-
-//         const { newRating1, newRating2 } = calculateElo(
-//             p1Elo, 
-//             p2Elo, 
-//             Number(form.score1), 
-//             Number(form.score2)
-//         );
-//         eloChange1 = newRating1 - p1Elo;
-//         eloChange2 = newRating2 - p2Elo;
-//     }
-
-//     try {
-//       if (editMatch) {
-//         await axios.put(`${API_URL}/${editMatch._id}`, {
-//           ...form,
-//           score1: Number(form.score1),
-//           score2: Number(form.score2),
-//         });
-//         Swal.fire("✅ Updated!", "Match updated successfully! Leaderboard recalculating...", "success");
-//         resetForm();
-//       } else {
-//         await axios.post(API_URL, {
-//           ...form,
-//           score1: Number(form.score1),
-//           score2: Number(form.score2),
-//           date: new Date().toISOString(),
-//           eloChange1,
-//           eloChange2,
-//         });
-//         Swal.fire("✅ Added!", "Match added successfully!", "success");
-//         setForm({ player1: "", player2: "", score1: "", score2: "" });
-//       }
-//       fetchMatches();
-//     } catch (err) {
-//       console.error(err);
-//       Swal.fire("❌ Error", "Failed to save match!", "error");
-//     }
-//   };
-
-//   const handleBulkSubmit = async () => {
-//     // ... (previous handleBulkSubmit function remains here)
-//     if (!bulkText.trim()) {
-//       Swal.fire("❗ Validation", "Please enter matches.", "warning");
-//       return;
-//     }
-//     const lines = bulkText.split("\n").map((l) => l.trim()).filter(Boolean);
-//     const bulkData = [];
-
-//     let tempPlayerElo = {};
-//     matches.forEach(m => {
-//       if (!tempPlayerElo[m.player1]) tempPlayerElo[m.player1] = INITIAL_ELO;
-//       if (!tempPlayerElo[m.player2]) tempPlayerElo[m.player2] = INITIAL_ELO;
-//     });
-//     const currentStats = calculateLeaderboard(matches, leaderboard);
-//     currentStats.forEach(p => tempPlayerElo[p.name] = p.elo);
-
-//     for (let line of lines) {
-//       try {
-//         const regex = /(.*?)\s*🔑\s*(\d+)\s*🆚\s*(\d+)\s*(.*)/;
-//         const match = line.match(regex);
-//         if (!match) continue;
-//         const [, player1, score1Str, score2Str, player2] = match;
-//         const score1 = Number(score1Str);
-//         const score2 = Number(score2Str);
-        
-//         const p1 = player1.trim();
-//         const p2 = player2.trim();
-
-//         if (p1 === p2) continue;
-
-//         if (!tempPlayerElo[p1]) tempPlayerElo[p1] = INITIAL_ELO;
-//         if (!tempPlayerElo[p2]) tempPlayerElo[p2] = INITIAL_ELO;
-        
-//         const p1Elo = tempPlayerElo[p1];
-//         const p2Elo = tempPlayerElo[p2];
-
-//         const { newRating1, newRating2 } = calculateElo(p1Elo, p2Elo, score1, score2);
-        
-//         const eloChange1 = newRating1 - p1Elo;
-//         const eloChange2 = newRating2 - p2Elo;
-
-//         tempPlayerElo[p1] = newRating1;
-//         tempPlayerElo[p2] = newRating2;
-
-//         bulkData.push({
-//           player1: p1,
-//           player2: p2,
-//           score1: score1,
-//           score2: score2,
-//           date: new Date().toISOString(),
-//           eloChange1,
-//           eloChange2,
-//         });
-//       } catch (err) {
-//         console.error("Failed to parse line:", line, err);
-//       }
-//     }
-
-//     if (bulkData.length === 0) {
-//       Swal.fire("⚠️ No valid matches found!", "Please check your input format.", "info");
-//       return;
-//     }
-
-//     try {
-//       await Promise.all(bulkData.map((m) => axios.post(API_URL, m)));
-//       Swal.fire("✅ Bulk Added!", `${bulkData.length} matches added successfully!`, "success");
-//       setBulkText("");
-//       fetchMatches();
-//     } catch (err) {
-//       console.error(err);
-//       Swal.fire("❌ Error", "Failed to add bulk matches!", "error");
-//     }
-//   };
-
-//   const handleDelete = async (id) => {
-//     // ... (previous handleDelete function remains here)
-//     const confirm = await Swal.fire({
-//       title: "Delete this match?",
-//       text: "This action cannot be undone. ELO will be recalculated on the next load.",
-//       icon: "warning",
-//       showCancelButton: true,
-//       confirmButtonText: "Yes, delete",
-//     });
-//     if (!confirm.isConfirmed) return;
-//     try {
-//       await axios.delete(`${API_URL}/${id}`);
-//       setMatches((prev) => prev.filter((m) => m._id !== id));
-//       Swal.fire("🗑 Deleted!", "Match removed! Leaderboard recalculating...", "success");
-//       fetchMatches();
-//     } catch (err) {
-//       console.error(err);
-//       Swal.fire("❌ Error", "Failed to delete!", "error");
-//     }
-//   };
-
-//   // Streak Calculation Function (Unchanged)
-//   const calculateStreaks = (matches, stats) => {
-//     // ... (previous calculateStreaks function remains here)
-//     const playerStatsWithStreaks = { ...stats };
-    
-//     Object.keys(playerStatsWithStreaks).forEach(playerName => {
-//       const playerMatches = matches
-//         .filter(m => m.player1 === playerName || m.player2 === playerName)
-//         .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-//       let streakCount = 0;
-//       let streakType = null;
-
-//       for (const m of playerMatches) {
-//         const isP1 = m.player1 === playerName;
-//         let result;
-
-//         if (m.score1 === m.score2) result = 'D';
-//         else if ((isP1 && m.score1 > m.score2) || (!isP1 && m.score2 > m.score1)) result = 'W';
-//         else result = 'L';
-
-//         if (streakType === null) {
-//           streakType = result;
-//           streakCount = 1;
-//         } else if (result === streakType) {
-//           streakCount++;
-//         } else {
-//           break;
-//         }
-//       }
-
-//       if (streakCount > 0 && streakType !== 'D') {
-//         playerStatsWithStreaks[playerName].streak = `${streakType}${streakCount}`;
-//       } else {
-//         playerStatsWithStreaks[playerName].streak = 'N/A';
-//       }
-//     });
-
-//     return playerStatsWithStreaks;
-//   };
-
-//   // Core Leaderboard Calculation Logic (Unchanged, calculates ELO based on all matches)
-//   const calculateLeaderboard = (matches) => {
-//     // ... (previous calculateLeaderboard function remains here)
-//     const stats = {};
-//     const playerElo = {}; 
-
-//     const allPlayers = [...new Set(matches.flatMap((m) => [m.player1, m.player2]))];
-//     allPlayers.forEach(p => {
-//         playerElo[p] = INITIAL_ELO;
-//         stats[p] = { points: 0, wins: 0, draws: 0, losses: 0, played: 0, elo: INITIAL_ELO };
-//     });
-
-//     const chronologicalMatches = [...matches].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-//     chronologicalMatches.forEach((m) => {
-//         const p1 = m.player1;
-//         const p2 = m.player2;
-//         const s1 = Number(m.score1);
-//         const s2 = Number(m.score2);
-
-//         // Standard Point Calculation
-//         [p1, p2].forEach(p => {
-//             if (!stats[p]) stats[p] = { points: 0, wins: 0, draws: 0, losses: 0, played: 0, elo: INITIAL_ELO };
-//             stats[p].played++;
-//         });
-
-//         if (s1 > s2) {
-//             stats[p1].points += 3;
-//             stats[p1].wins++;
-//             stats[p2].losses++;
-//         } else if (s2 > s1) {
-//             stats[p2].points += 3;
-//             stats[p2].wins++;
-//             stats[p1].losses++;
-//         } else {
-//             stats[p1].points++;
-//             stats[p2].points++;
-//             stats[p1].draws++;
-//             stats[p2].draws++;
-//         }
-        
-//         // ELO Calculation
-//         const currentElo1 = playerElo[p1] || INITIAL_ELO;
-//         const currentElo2 = playerElo[p2] || INITIAL_ELO;
-        
-//         const { newRating1, newRating2 } = calculateElo(currentElo1, currentElo2, s1, s2);
-        
-//         playerElo[p1] = newRating1;
-//         playerElo[p2] = newRating2;
-        
-//         stats[p1].elo = newRating1;
-//         stats[p2].elo = newRating2;
-
-//     });
-
-//     const statsWithStreaks = calculateStreaks(matches, stats);
-
-//     return Object.entries(statsWithStreaks)
-//       .map(([name, s]) => ({
-//         name,
-//         ...s,
-//         ratio: s.played ? ((s.wins / s.played) * 100).toFixed(1) : "0.0",
-//       }))
-//       .sort((a, b) => {
-//         if (sortBy === 'elo') return b.elo - a.elo;
-//         return b[sortBy] - a[sortBy]
-//       });
-//   };
-
-//   // NEW: Filtered Matches by Date and Player
-//   const filteredMatchesByDate = useMemo(() => {
-//     return matches.filter(m => {
-//       const matchDate = new Date(m.date);
-//       let isValid = true;
-
-//       if (dateRange.start) {
-//         const startDate = new Date(dateRange.start);
-//         startDate.setHours(0, 0, 0, 0); // Start of the day
-//         if (matchDate < startDate) isValid = false;
-//       }
-//       if (dateRange.end) {
-//         const endDate = new Date(dateRange.end);
-//         endDate.setHours(23, 59, 59, 999); // End of the day
-//         if (matchDate > endDate) isValid = false;
-//       }
-//       return isValid;
-//     });
-//   }, [matches, dateRange]);
-
-
-//   useEffect(() => {
-//     // Recalculate leaderboard whenever filtered matches change
-//     const sorted = calculateLeaderboard(filteredMatchesByDate);
-//     setLeaderboard(sorted);
-//   }, [filteredMatchesByDate, sortBy]); // Dependency on filteredMatchesByDate
-
-//   // Reset Leaderboard (Unchanged)
-//   const handleReset = async () => {
-//     // ... (previous handleReset function remains here)
-//     const step1 = await Swal.fire({
-//       title: "Reset all matches?",
-//       text: "This will permanently delete all matches and reset ELO scores.",
-//       icon: "warning",
-//       showCancelButton: true,
-//       confirmButtonText: "Yes, reset",
-//     });
-//     if (!step1.isConfirmed) return;
-//     try {
-//       for (const m of matches) {
-//         await axios.delete(`${API_URL}/${m._id}`);
-//       }
-//       setMatches([]);
-//       setLeaderboard([]);
-//       Swal.fire("✅ Cleared!", "Leaderboard reset done!", "success");
-//     } catch (err) {
-//       console.error(err);
-//       Swal.fire("❌ Error", "Failed to reset!", "error");
-//     }
-//   };
-
-//   // Export CSV (Unchanged)
-//   const exportCSV = (data, filename = "export.csv") => {
-//     // ... (previous exportCSV function remains here)
-//     if (!data || data.length === 0) {
-//       Swal.fire("⚠️ Empty", "No data to export.", "info");
-//       return;
-//     }
-//     const cleanData = data.map(({streak, ratio, ...rest}) => ({...rest, ratio, streak}));
-    
-//     const keys = Object.keys(cleanData[0]);
-//     const csvRows = [keys.join(",")];
-//     for (const row of cleanData) {
-//       csvRows.push(
-//         keys
-//           .map((k) => {
-//             const cell = row[k] ?? "";
-//             const safe = String(cell).replace(/"/g, '""');
-//             return `"${safe}"`;
-//           })
-//           .join(",")
-//       );
-//     }
-//     const csv = csvRows.join("\n");
-//     const blob = new Blob([csv], { type: "text/csv" });
-//     const url = URL.createObjectURL(blob);
-//     const a = document.createElement("a");
-//     a.href = url;
-//     a.download = filename;
-//     a.click();
-//     URL.revokeObjectURL(url);
-//   };
-
-//   // Theme toggle (Unchanged)
-//   const toggleTheme = () => {
-//     setDarkMode((prev) => {
-//       localStorage.setItem("darkMode", String(!prev));
-//       return !prev;
-//     });
-//   };
-
-//   const theme = darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900";
-//   const playerNames = useMemo(() => [
-//     ...new Set(matches.flatMap((m) => [m.player1, m.player2])),
-//   ], [matches]);
-
-//   // Filtered and Paginated Matches (Filtered by Date/Player)
-//   const filteredMatchesByPlayer = useMemo(() => filteredMatchesByDate.filter((m) => {
-//     if (matchPlayerFilter === "all") return true;
-//     return m.player1 === matchPlayerFilter || m.player2 === matchPlayerFilter;
-//   }), [filteredMatchesByDate, matchPlayerFilter]); // Dependency on filteredMatchesByDate
-
-//   const paginated = filteredMatchesByPlayer.slice((page - 1) * perPage, page * perPage);
-//   const totalPages = Math.max(
-//     1,
-//     Math.ceil(filteredMatchesByPlayer.length / perPage)
-//   );
-
-//   // Leaderboard Filtering based on state
-//   const filteredBoard = leaderboard
-//     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-//     .filter((p) => {
-//       if (filter === "winners") return p.wins > p.losses;
-//       if (filter === "draws") return p.draws > 0;
-//       return true;
-//     });
-
-//   // Player Profile Modal Handler (Unchanged)
-//   const handlePlayerClick = (playerName) => {
-//     setSelectedPlayer(playerName);
-//   };
-  
-//   // Responsive Class for Leaderboard Stat Columns (Unchanged)
-//   const getStatColClass = (isTitle = false) => isTitle ? 
-//     "hidden sm:flex flex-col w-10 sm:w-12 text-center" : 
-//     "hidden sm:flex flex-col w-10 sm:w-12 text-center";
-
-
-//   return (
-//     <div className={`${theme} min-h-screen p-2 sm:p-6 transition-all duration-500`}>
-//       <div className="max-w-7xl mx-auto">
-//         {/* Player Stats Modal */}
-//         {selectedPlayer && (
-//           <PlayerStatsModal
-//             playerName={selectedPlayer}
-//             leaderboard={leaderboard}
-//             matches={matches} // Pass all matches for full ELO history on chart
-//             onClose={() => setSelectedPlayer(null)}
-//           />
-//         )}
-//         {/* --- */}
-
-//         {/* Header (Unchanged) */}
-//         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pt-4">
-//           <h1 className="text-2xl sm:text-3xl font-extrabold mb-2 sm:mb-0 text-blue-400">
-//             🏆 Dynamic Scoreboard (w/ ELO, Charts, Filters)
-//           </h1>
-//           <div className="flex gap-2 items-center">
-//             <button
-//               onClick={toggleTheme}
-//               className="p-2 rounded-full bg-gray-700 hover:scale-105 transition text-white"
-//               title="Toggle theme"
-//             >
-//               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-//             </button>
-//             <button
-//               onClick={fetchMatches}
-//               className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 hover:scale-105 transition text-white"
-//               title="Refresh"
-//             >
-//               <RefreshCcw size={18} />
-//             </button>
-//             {isAdmin && (
-//               <button
-//                 onClick={handleReset}
-//                 className="p-2 rounded-full bg-red-600 hover:bg-red-700 hover:scale-105 transition text-white"
-//                 title="Reset all matches"
-//               >
-//                 <Trash2 size={18} />
-//               </button>
-//             )}
-//           </div>
-//         </div>
-
-//         {/* Admin Form (Unchanged) */}
-//         {isAdmin && (
-//           <div className="mb-6 p-4 rounded-xl bg-gray-800/50 shadow-lg">
-//             <h2 className="text-xl font-semibold mb-3 border-b pb-2 border-gray-700">Add/Edit Match</h2>
-//             {/* Standard Match Add Form */}
-//             <form
-//               onSubmit={handleSubmit}
-//               className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4"
-//             >
-//               <input
-//                 name="player1"
-//                 list="players"
-//                 value={form.player1}
-//                 onChange={handleChange}
-//                 placeholder="Player 1"
-//                 className="p-2 rounded bg-gray-700 text-white col-span-2 md:col-span-1"
-//               />
-//               <input
-//                 name="player2"
-//                 list="players"
-//                 value={form.player2}
-//                 onChange={handleChange}
-//                 placeholder="Player 2"
-//                 className="p-2 rounded bg-gray-700 text-white col-span-2 md:col-span-1"
-//               />
-//               <input
-//                 name="score1"
-//                 type="number"
-//                 value={form.score1}
-//                 onChange={handleChange}
-//                 placeholder="Score 1"
-//                 className="p-2 rounded bg-gray-700 text-white"
-//               />
-//               <input
-//                 name="score2"
-//                 type="number"
-//                 value={form.score2}
-//                 onChange={handleChange}
-//                 placeholder="Score 2"
-//                 className="p-2 rounded bg-gray-700 text-white"
-//               />
-//               <div className="flex gap-2 col-span-2 md:col-span-2">
-//                 <button
-//                   type="submit"
-//                   className="bg-green-600 hover:bg-green-700 p-2 rounded font-bold w-full transition"
-//                 >
-//                   {editMatch ? "Update Match" : "Add Match"}
-//                 </button>
-//                 {(editMatch || form.player1 || form.player2 || form.score1 || form.score2) && (
-//                   <button
-//                     type="button"
-//                     onClick={resetForm}
-//                     className="bg-red-500 hover:bg-red-600 p-2 rounded font-medium transition"
-//                     title="Reset Form"
-//                   >
-//                     <X size={20} />
-//                   </button>
-//                 )}
-//               </div>
-//               <datalist id="players">
-//                 {playerNames.map((p) => (
-//                   <option key={p} value={p} />
-//                 ))}
-//               </datalist>
-//             </form>
-
-//             {/* Bulk Add (Unchanged) */}
-//             <div className="mt-4 pt-4 border-t border-gray-700">
-//               <h3 className="text-lg font-medium mb-2">Bulk Add Matches</h3>
-//               <textarea
-//                 value={bulkText}
-//                 onChange={(e) => setBulkText(e.target.value)}
-//                 placeholder={`Paste multiple matches here, one per line:\nExample:\nAsib Ahmed 🔑 3🆚2 Shahriar Ali\nOmar Faruk 🔑 1🆚1 Kazi Hasan`}
-//                 className="w-full p-2 rounded bg-gray-700 text-white h-32 resize-none text-sm"
-//               ></textarea>
-//               <button
-//                 onClick={handleBulkSubmit}
-//                 className="mt-2 bg-purple-600 hover:bg-purple-700 p-2 rounded font-bold transition w-full md:w-auto text-white"
-//               >
-//                 Add Bulk Matches
-//               </button>
-//             </div>
-//           </div>
-//         )}
-
-//         <hr className="my-6 border-gray-700"/>
-
-//         {/* Search, Filter & NEW Date Range Filter */}
-//         <div className="flex flex-col md:flex-row gap-3 mb-4 justify-between items-start md:items-center p-3 rounded-xl bg-gray-800/50 shadow-md">
-//           <input
-//             type="text"
-//             placeholder="🔍 Search player"
-//             value={search}
-//             onChange={(e) => setSearch(e.target.value)}
-//             className="p-2 rounded bg-gray-700 w-full md:w-1/5 text-white"
-//           />
-          
-//           {/* Date Filter Inputs */}
-//           <div className="flex gap-2 items-center w-full md:w-auto">
-//             <Calendar size={20} className="text-gray-400 min-w-4"/>
-//             <input
-//               type="date"
-//               value={dateRange.start}
-//               onChange={(e) => setDateRange(f => ({...f, start: e.target.value}))}
-//               className="p-2 rounded bg-gray-700 text-white text-sm"
-//               title="Start Date"
-//             />
-//             <span className="text-gray-400">to</span>
-//             <input
-//               type="date"
-//               value={dateRange.end}
-//               onChange={(e) => setDateRange(f => ({...f, end: e.target.value}))}
-//               className="p-2 rounded bg-gray-700 text-white text-sm"
-//               title="End Date"
-//             />
-//           </div>
-
-//           <div className="flex flex-wrap gap-3 w-full md:w-auto">
-//             <select
-//               value={filter}
-//               onChange={(e) => setFilter(e.target.value)}
-//               className="p-2 rounded bg-gray-700 text-white"
-//             >
-//               <option value="all">All Players</option>
-//               <option value="winners">Winners Only</option>
-//               <option value="draws">Draws Only</option>
-//             </select>
-//             <select
-//               value={sortBy}
-//               onChange={(e) => setSortBy(e.target.value)}
-//               className="p-2 rounded bg-gray-700 text-white font-bold"
-//             >
-//               <option value="elo">Sort by ELO (RATING)</option>
-//               <option value="points">Sort by Points (PTS)</option>
-//               <option value="wins">Sort by Wins (W)</option>
-//               <option value="played">Sort by Played (PLD)</option>
-//             </select>
-//             <button
-//               onClick={() => exportCSV(leaderboard, "leaderboard_filtered.csv")}
-//               className="p-2 bg-green-700 hover:bg-green-600 rounded flex items-center gap-1 transition text-white"
-//             >
-//               <Download size={16} /> CSV
-//             </button>
-//           </div>
-//         </div>
-
-//         {/* Summary (Updated to reflect filtered matches) */}
-//         <div className="text-center mb-6 space-y-1 p-3 rounded-xl bg-gray-800/50 shadow-md">
-//           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-sm text-gray-400">
-//             <p className="flex flex-col items-center">
-//               <span className="font-bold text-lg text-white">
-//                 {leaderboard.length}
-//               </span>
-//               <span>Active Players (in filter)</span>
-//             </p>
-//             <p className="flex flex-col items-center">
-//               <span className="font-bold text-lg text-white">
-//                 {filteredMatchesByDate.length}{" "}
-//                 {loading && (
-//                   <span className="ml-1 animate-spin inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></span>
-//                 )}
-//               </span>
-//               <span>Matches in Range</span>
-//             </p>
-//             <p className="flex flex-col items-center">
-//               <span className="font-bold text-lg text-red-400">
-//                 {leaderboard[0]?.name || "N/A"}
-//               </span>
-//               <span>
-//                 Top ELO ({leaderboard[0]?.elo || INITIAL_ELO})
-//               </span>
-//             </p>
-//             <p className="flex flex-col items-center col-span-2 sm:col-span-1">
-//               <span className="font-bold text-lg text-yellow-400">
-//                 {leaderboard.find(p => p.streak?.startsWith('W'))?.name || "N/A"}
-//               </span>
-//               <span>
-//                 Longest Streak ({leaderboard.find(p => p.streak?.startsWith('W'))?.streak || 'N/A'})
-//               </span>
-//             </p>
-//             <p className="flex flex-col items-center">
-//               <span className="font-bold text-lg text-white">
-//                 {(filteredMatchesByDate.length
-//                   ? (filteredMatchesByDate.reduce((acc, m) => acc + m.score1 + m.score2, 0) / filteredMatchesByDate.length).toFixed(1)
-//                   : 0
-//                 )}
-//               </span>
-//               <span>Avg Total Score</span>
-//             </p>
-//           </div>
-//         </div>
-
-//         <hr className="my-6 border-gray-700"/>
-
-//         {/* Leaderboard Table (Unchanged) */}
-//         <h2 className="text-2xl font-semibold mb-3 text-center mt-8 text-white">
-//           🏁 Leaderboard (Filtered)
-//         </h2>
-        
-//         {/* Leaderboard Headers */}
-//         <div className="flex justify-between items-center p-2 text-xs font-semibold uppercase text-gray-400 bg-gray-800/50 rounded-t-lg shadow-inner">
-//           <span className="w-1/3 sm:w-auto text-left">RANK / PLAYER</span>
-//           <div className="flex justify-end gap-x-4">
-//             <div className="flex flex-col w-12 text-center text-red-400">ELO</div>
-//             <div className="flex flex-col w-12 text-center">STRK</div>
-//             <div className="flex flex-col w-10 text-center">PTS</div>
-//             <div className={getStatColClass(true)}>W</div>
-//             <div className={getStatColClass(true)}>D</div>
-//             <div className={getStatColClass(true)}>L</div>
-//             <div className={getStatColClass(true)}>PLD</div>
-//             <div className={getStatColClass(true)}>W%</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 mb-8">
-//           {filteredBoard.length === 0 && (
-//             <p className="text-center text-gray-400 p-4 bg-gray-700 rounded-b-lg">No players found (Check Filters/Date Range).</p>
-//           )}
-//           {filteredBoard.map((p, i) => (
-//             <motion.div
-//               key={p.name}
-//               initial={{ opacity: 0, y: 10 }}
-//               animate={{ opacity: 1, y: 0 }}
-//               transition={{ delay: i * 0.05 }}
-//               className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-lg shadow-lg transition-all duration-300 border-2 
-//               ${
-//                 i === 0
-//                   ? "bg-yellow-400 text-black font-bold hover:shadow-[0_0_15px_#FFD700] hover:scale-[1.01] border-yellow-500"
-//                   : i === 1
-//                   ? "bg-gray-500 text-black font-semibold hover:shadow-[0_0_15px_#C0C0C0] hover:scale-[1.01] border-gray-400"
-//                   : i === 2
-//                   ? "bg-amber-700 text-white font-semibold hover:shadow-[0_0_15px_#FFBF00] hover:scale-[1.01] border-amber-600"
-//                   : "bg-gray-700 text-white hover:shadow-[0_0_10px_#00FFFF] hover:scale-[1.01] border-gray-600"
-//               }`}
-//             >
-//               {/* Player Profile Link */}
-//               <button
-//                 onClick={() => handlePlayerClick(p.name)}
-//                 className="mb-2 sm:mb-0 text-lg hover:underline transition font-bold flex items-center gap-2 text-left"
-//                 title="View full player stats"
-//               >
-//                 <span className="w-6 text-right">{i + 1}.</span> {p.name} {i < 3 && ["🥇", "🥈", "🥉"][i]}
-//                 <Zap size={14} className="text-blue-400"/>
-//               </button>
-              
-//               {/* Stats Block */}
-//               <div className="flex flex-wrap justify-center sm:justify-end gap-x-4 gap-y-2 text-center text-sm w-full sm:w-auto">
-                
-//                 {/* ELO Display */}
-//                 <div className="flex flex-col w-12">
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200 block sm:hidden">ELO</span>
-//                   <span className="font-bold text-red-500">{p.elo}</span>
-//                 </div>
-
-//                 {/* Streak Display */}
-//                 <div className="flex flex-col w-12">
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200 block sm:hidden">STRK</span>
-//                   <span className={`font-bold ${p.streak?.startsWith('W') ? 'text-green-600' : p.streak?.startsWith('L') ? 'text-red-600' : 'text-yellow-600'}`}>
-//                     {p.streak}
-//                   </span>
-//                 </div>
-
-//                 {/* Points Display */}
-//                 <div className="flex flex-col w-10">
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200 block sm:hidden">PTS</span>
-//                   <span className={`font-bold ${i === 0 ? "text-red-600" : "text-yellow-500"}`}>
-//                     {p.points}
-//                   </span>
-//                 </div>
-                
-//                 {/* Secondary Stats */}
-//                 <div className={getStatColClass()}>
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200">W</span>
-//                   <span className=" font-bold">{p.wins}</span>
-//                 </div>
-//                 <div className={getStatColClass()}>
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200">D</span>
-//                   <span className=" font-bold">{p.draws}</span>
-//                 </div>
-//                 <div className={getStatColClass()}>
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200">L</span>
-//                   <span className="font-bold">{p.losses}</span>
-//                 </div>
-//                 <div className={getStatColClass()}>
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200">PLD</span>
-//                   <span className="font-bold">{p.played}</span>
-//                 </div>
-//                 <div className={getStatColClass()}>
-//                   <span className="font-semibold text-gray-700 dark:text-gray-200">W%</span>
-//                   <span className="font-bold">{p.ratio}%</span>
-//                 </div>
-//               </div>
-//             </motion.div>
-//           ))}
-//         </div>
-
-//         <hr className="my-6 border-gray-700"/>
-
-//         {/* Recent Matches */}
-//         <div className="mt-10">
-//           <button
-//             onClick={() => setShowMatches(!showMatches)}
-//             className="flex items-center gap-1 mx-auto mb-4 font-semibold text-xl hover:text-blue-400 transition"
-//           >
-//             ⚡ Recent Matches ({filteredMatchesByPlayer.length}) {showMatches ? <ChevronUp /> : <ChevronDown />}
-//           </button>
-          
-//           <AnimatePresence>
-//             {showMatches && (
-//               <motion.div
-//                 initial={{ opacity: 0, height: 0 }}
-//                 animate={{ opacity: 1, height: "auto" }}
-//                 exit={{ opacity: 0, height: 0 }}
-//                 transition={{ duration: 0.3 }}
-//                 className="overflow-hidden"
-//               >
-//                 <div className="space-y-3">
-//                   {/* Match Player Filter */}
-//                   <div className="flex justify-center mb-4">
-//                     <select
-//                       value={matchPlayerFilter}
-//                       onChange={(e) => {
-//                         setMatchPlayerFilter(e.target.value);
-//                         setPage(1); // Reset page on filter change
-//                       }}
-//                       className="p-2 rounded bg-gray-700 text-white"
-//                     >
-//                       <option value="all">Filter Recent Matches by Player (All)</option>
-//                       {playerNames.map((p) => (
-//                         <option key={p} value={p}>
-//                           {p}
-//                         </option>
-//                       ))}
-//                     </select>
-//                   </div>
-
-//                   {paginated.length === 0 && (
-//                     <p className="text-center text-gray-400 p-4 bg-gray-800 rounded-lg">
-//                       No matches found for the current filters.
-//                     </p>
-//                   )}
-//                   {paginated.map((m) => {
-//                     const isFiltered =
-//                       matchPlayerFilter !== "all" &&
-//                       (m.player1 === matchPlayerFilter || m.player2 === matchPlayerFilter);
-
-//                     const baseClass = "p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center";
-//                     const highlightClass = isFiltered
-//                       ? "bg-purple-800 border-2 border-purple-400"
-//                       : "bg-gray-700";
-
-//                     return (
-//                       <motion.div
-//                         key={m._id}
-//                         initial={{ opacity: 0, y: 10 }}
-//                         animate={{ opacity: 1, y: 0 }}
-//                         exit={{ opacity: 0, x: -20 }}
-//                         transition={{ duration: 0.2 }}
-//                         className={`${baseClass} ${highlightClass}`}
-//                       >
-//                         <div className="mb-2 sm:mb-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-//                             {/* Player 1 Link */}
-//                             <button
-//                               onClick={() => handlePlayerClick(m.player1)}
-//                               className="font-bold hover:underline text-blue-300"
-//                               title="View stats"
-//                             >
-//                               {m.player1}
-//                             </button>
-                            
-//                             <span className="text-xl font-extrabold mx-2 text-yellow-400">{m.score1} - {m.score2}</span>
-                            
-//                             {/* Player 2 Link */}
-//                             <button
-//                               onClick={() => handlePlayerClick(m.player2)}
-//                               className="font-bold hover:underline text-blue-300"
-//                               title="View stats"
-//                             >
-//                               {m.player2}
-//                             </button>
-//                         </div>
-                        
-//                         <div className="flex items-center gap-4 text-sm mt-2 sm:mt-0">
-//                           <span className="text-xs text-gray-400">
-//                             {new Date(m.date).toLocaleDateString()}
-//                           </span>
-//                           {isAdmin && (
-//                             <>
-//                               <button
-//                                 onClick={() => {
-//                                   setEditMatch(m);
-//                                   setForm({
-//                                     player1: m.player1,
-//                                     player2: m.player2,
-//                                     score1: m.score1,
-//                                     score2: m.score2,
-//                                   });
-//                                   window.scrollTo({ top: 0, behavior: "smooth" });
-//                                 }}
-//                                 className="p-1 rounded bg-yellow-600 hover:bg-yellow-700 transition"
-//                                 title="Edit Match"
-//                               >
-//                                 <Edit size={16} />
-//                               </button>
-//                               <button
-//                                 onClick={() => handleDelete(m._id)}
-//                                 className="p-1 rounded bg-red-600 hover:bg-red-700 transition"
-//                                 title="Delete Match"
-//                               >
-//                                 <Trash2 size={16} />
-//                               </button>
-//                             </>
-//                           )}
-//                         </div>
-//                       </motion.div>
-//                     );
-//                   })}
-
-//                   {/* Pagination Controls */}
-//                   {filteredMatchesByPlayer.length > perPage && (
-//                     <div className="flex justify-center items-center gap-4 mt-6">
-//                       <button
-//                         onClick={() => setPage((p) => Math.max(1, p - 1))}
-//                         disabled={page === 1}
-//                         className="p-2 bg-gray-600 rounded disabled:opacity-50 hover:bg-gray-500 transition"
-//                       >
-//                         Previous
-//                       </button>
-//                       <span className="text-white">
-//                         Page {page} of {totalPages}
-//                       </span>
-//                       <button
-//                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-//                         disabled={page === totalPages}
-//                         className="p-2 bg-gray-600 rounded disabled:opacity-50 hover:bg-gray-500 transition"
-//                       >
-//                         Next
-//                       </button>
-//                     </div>
-//                   )}
-//                 </div>
-//               </motion.div>
-//             )}
-//           </AnimatePresence>
-//         </div>
-        
-//         <p className="text-center text-xs text-gray-500 mt-10 pb-4">
-//             Developed by Gemini AI - Enhanced Scoreboard v2.0 (w/ ELO, Charts, Filters)
-//         </p>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Scoreboard;

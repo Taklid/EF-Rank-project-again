@@ -7,6 +7,7 @@ import SignIn from "../LoginPage/SignUp";
 import Scoreboard from "../EfootballRank/Scoreboard";
 import PlayerInfo from "../EfootballRank/EFStatus/PlayerInfo";
 import PrivateRoute from "./PrivateRoute";
+import PlayerStatusCard from "../EfootballRank/EFStatus/PlayerstatusCard";
 
 // import MainBoard from "../EfootballRank/MainBoard";
 
@@ -52,6 +53,12 @@ export const router = createBrowserRouter([
         path: 'info',
         element: <PrivateRoute>
           <PlayerInfo></PlayerInfo>
+        </PrivateRoute>
+      },
+      {
+        path: 'card',
+        element: <PrivateRoute>
+          <PlayerStatusCard></PlayerStatusCard>
         </PrivateRoute>
       },
       
